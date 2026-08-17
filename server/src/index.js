@@ -5,6 +5,7 @@ const { Terminal, User, Audit, ImportRun, AgentJob } = require('./models'); cons
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) { console.error('JWT_SECRET must contain at least 32 characters'); if (require.main === module) process.exit(1); }
 const app = express(); app.set('trust proxy', 1); app.use(helmet()); app.use(compression()); app.use(cors({ origin: process.env.CLIENT_ORIGIN?.split(',') || false })); app.use(express.json({ limit: '1mb' })); app.use(mongoSanitize());
 app.use('/api/auth', rateLimit({ windowMs: 15*60*1000, limit: 20, standardHeaders: true, legacyHeaders: false }));
+app.get('/api/health', async (req, res) => { try { const dbState = mongoose.connection.readyState; const states = {0:'disconnected',1:'connected',2:'connecting',3:'disconnecting'}; res.json({ ok: true, db: states[dbState]||dbState, jwt: !!process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32, mongo_uri_set: !!process.env.MONGODB_URI, node: process.version }); } catch(e) { res.status(500).json({ ok: false, error: e.message }); } });
 const agentPhotoUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024,files:1},fileFilter:(req,file,cb)=>cb(null,['image/jpeg','image/png','image/webp'].includes(file.mimetype))});
 app.post('/api/auth/login', async (req,res,next)=>{ try { const body=z.object({email:z.string().email(),password:z.string().min(8)}).parse(req.body); const user=await User.findOne({email:body.email.toLowerCase()}); if(!user?.active || !await bcrypt.compare(body.password,user.passwordHash)) return res.status(401).json({message:'Invalid credentials'}); user.lastLoginAt=new Date(); await user.save(); res.json({token:sign(user),user:{id:user.id,name:user.name,email:user.email,role:user.role}}); } catch(e){next(e)} });
 app.get('/api/me',auth,(req,res)=>res.json(req.user));
@@ -34,19 +35,17 @@ app.get('/api/assignment-history',auth,permit('admin'),async(req,res,next)=>{try
 app.use((err,req,res,next)=>{console.error(err);if(err.name==='ZodError')return res.status(400).json({message:'Validation failed',issues:err.issues});res.status(500).json({message:'An unexpected error occurred',...(process.env.NODE_ENV!=='production'?{detail:err.message}:{})});});
 async function start(){await mongoose.connect(process.env.MONGODB_URI);const email=process.env.ADMIN_EMAIL?.toLowerCase();if(email&&!await User.exists({email}))await User.create({name:'Administrator',email,passwordHash:await bcrypt.hash(process.env.ADMIN_PASSWORD,12),role:'admin'});app.listen(process.env.PORT||4000,()=>console.log(`API ready on ${process.env.PORT||4000}`));} if(require.main===module)start().catch(e=>{console.error(e);process.exit(1)});
 
-// Vercel: connect DB lazily on first request
-let dbConnected = false;
-const originalApp = app;
-const wrappedApp = async (req, res) => {
-  if (!dbConnected) {
-    await mongoose.connect(process.env.MONGODB_URI);
+// Vercel serverless: connect DB then hand off to Express
+const connectPromise = mongoose.connect(process.env.MONGODB_URI)
+  .then(async () => {
     const email = process.env.ADMIN_EMAIL?.toLowerCase();
     if (email && !await User.exists({ email })) {
       await User.create({ name: 'Administrator', email, passwordHash: await bcrypt.hash(process.env.ADMIN_PASSWORD, 12), role: 'admin' });
     }
-    dbConnected = true;
-  }
-  return originalApp(req, res);
-};
+  })
+  .catch(err => console.error('DB connect error:', err));
 
-module.exports = require.main === module ? app : wrappedApp;
+module.exports = async (req, res) => {
+  await connectPromise;
+  return app(req, res);
+};
