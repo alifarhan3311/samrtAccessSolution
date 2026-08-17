@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express'); const mongoose = require('mongoose'); const bcrypt = require('bcryptjs'); const crypto = require('crypto');
 const helmet = require('helmet'); const cors = require('cors'); const compression = require('compression'); const rateLimit = require('express-rate-limit'); const mongoSanitize = require('express-mongo-sanitize'); const multer = require('multer'); const { z } = require('zod');
 const { Terminal, User, Audit, ImportRun, AgentJob } = require('./models'); const { sign, auth, permit, audit } = require('./security'); const { importWorkbook } = require('./importer'); const { uploadBuffer, deleteFile } = require('./cloudinary');
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) { console.error('JWT_SECRET must contain at least 32 characters'); process.exit(1); }
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) { console.error('JWT_SECRET must contain at least 32 characters'); if (require.main === module) process.exit(1); }
 const app = express(); app.set('trust proxy', 1); app.use(helmet()); app.use(compression()); app.use(cors({ origin: process.env.CLIENT_ORIGIN?.split(',') || false })); app.use(express.json({ limit: '1mb' })); app.use(mongoSanitize());
 app.use('/api/auth', rateLimit({ windowMs: 15*60*1000, limit: 20, standardHeaders: true, legacyHeaders: false }));
 const agentPhotoUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024,files:1},fileFilter:(req,file,cb)=>cb(null,['image/jpeg','image/png','image/webp'].includes(file.mimetype))});
@@ -32,4 +32,21 @@ app.get('/api/jobs/:id/proofs/:file',auth,async(req,res,next)=>{try{const job=aw
 app.get('/api/imports',auth,async(req,res,next)=>{try{res.json(await ImportRun.find().sort({createdAt:-1}).limit(20).populate('importedBy','name'));}catch(e){next(e)}});app.get('/api/audit',auth,permit('admin'),async(req,res,next)=>{try{res.json(await Audit.find().sort({createdAt:-1}).limit(100).populate('actor','name email'));}catch(e){next(e)}});
 app.get('/api/assignment-history',auth,permit('admin'),async(req,res,next)=>{try{const escape=s=>String(s||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const match={};if(req.query.search){const rx=new RegExp(escape(req.query.search),'i');match.$or=[{terminalId:rx},{'assignmentHistory.businessName':rx},{'assignmentHistory.address':rx},{'assignmentHistory.city':rx}];}if(req.query.city)match['assignmentHistory.city']=new RegExp(`^${escape(req.query.city)}$`,'i');if(req.query.from||req.query.to){match['assignmentHistory.assignedAt']={};if(req.query.from)match['assignmentHistory.assignedAt'].$gte=new Date(`${req.query.from}T00:00:00`);if(req.query.to)match['assignmentHistory.assignedAt'].$lte=new Date(`${req.query.to}T23:59:59.999`);}const limit=Math.min(5000,Math.max(1,+req.query.limit||500));const pipeline=[{$unwind:'$assignmentHistory'},{$match:match},{$lookup:{from:'users',localField:'assignmentHistory.assignedBy',foreignField:'_id',as:'assignedUser'}},{$unwind:{path:'$assignedUser',preserveNullAndEmptyArrays:true}},{$project:{_id:0,terminalId:1,originalBusiness:'$original.businessName',originalAddress:'$original.address',businessName:'$assignmentHistory.businessName',address:'$assignmentHistory.address',city:'$assignmentHistory.city',paymentAmount:'$assignmentHistory.paymentAmount',assignedAt:'$assignmentHistory.assignedAt',endedAt:'$assignmentHistory.endedAt',note:'$assignmentHistory.note',assignedBy:'$assignedUser.name',assignedByEmail:'$assignedUser.email'}},{$sort:{assignedAt:-1}},{$limit:limit}];const items=await Terminal.aggregate(pipeline);res.json({items,total:items.length,limited:items.length===limit});}catch(e){next(e)}});
 app.use((err,req,res,next)=>{console.error(err);if(err.name==='ZodError')return res.status(400).json({message:'Validation failed',issues:err.issues});res.status(500).json({message:'An unexpected error occurred',...(process.env.NODE_ENV!=='production'?{detail:err.message}:{})});});
-async function start(){await mongoose.connect(process.env.MONGODB_URI);const email=process.env.ADMIN_EMAIL?.toLowerCase();if(email&&!await User.exists({email}))await User.create({name:'Administrator',email,passwordHash:await bcrypt.hash(process.env.ADMIN_PASSWORD,12),role:'admin'});app.listen(process.env.PORT||4000,()=>console.log(`API ready on ${process.env.PORT||4000}`));} if(require.main===module)start().catch(e=>{console.error(e);process.exit(1)}); module.exports=app;
+async function start(){await mongoose.connect(process.env.MONGODB_URI);const email=process.env.ADMIN_EMAIL?.toLowerCase();if(email&&!await User.exists({email}))await User.create({name:'Administrator',email,passwordHash:await bcrypt.hash(process.env.ADMIN_PASSWORD,12),role:'admin'});app.listen(process.env.PORT||4000,()=>console.log(`API ready on ${process.env.PORT||4000}`));} if(require.main===module)start().catch(e=>{console.error(e);process.exit(1)});
+
+// Vercel: connect DB lazily on first request
+let dbConnected = false;
+const originalApp = app;
+const wrappedApp = async (req, res) => {
+  if (!dbConnected) {
+    await mongoose.connect(process.env.MONGODB_URI);
+    const email = process.env.ADMIN_EMAIL?.toLowerCase();
+    if (email && !await User.exists({ email })) {
+      await User.create({ name: 'Administrator', email, passwordHash: await bcrypt.hash(process.env.ADMIN_PASSWORD, 12), role: 'admin' });
+    }
+    dbConnected = true;
+  }
+  return originalApp(req, res);
+};
+
+module.exports = require.main === module ? app : wrappedApp;

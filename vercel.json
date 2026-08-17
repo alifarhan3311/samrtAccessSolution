@@ -4,8 +4,8 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/server/src/index.js" },
-    { "source": "/uploads/(.*)", "destination": "/server/src/index.js" },
-    { "source": "/((?!assets/).*)", "destination": "/index.html" }
+    { "source": "/api/:path*", "destination": "/api/index.js" },
+    { "source": "/uploads/:path*", "destination": "/api/index.js" },
+    { "source": "/:path*", "destination": "/index.html" }
   ]
 }
