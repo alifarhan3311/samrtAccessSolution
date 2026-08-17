@@ -1,11 +1,13 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "server/src/index.js",
-      "use": "@vercel/node"
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
+  "functions": {
+    "server/src/index.js": {
+      "runtime": "@vercel/node@3"
     }
-  ],
+  },
   "routes": [
     {
       "src": "/api/(.*)",
