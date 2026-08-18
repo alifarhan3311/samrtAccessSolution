@@ -48,4 +48,30 @@ const agentJobSchema = new mongoose.Schema({
   events: [jobEventSchema], approvedAt: Date, approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
-module.exports = { Terminal: mongoose.model('Terminal', terminalSchema), User: mongoose.model('User', userSchema), Audit: mongoose.model('Audit', auditSchema), ImportRun: mongoose.model('ImportRun', importSchema), AgentJob: mongoose.model('AgentJob', agentJobSchema) };
+// Cash withdrawn from bank by admin
+const cashWithdrawalSchema = new mongoose.Schema({
+  amount:      { type: Number, required: true, min: 1 },
+  note:        { type: String, maxlength: 500 },
+  withdrawnBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  date:        { type: Date, default: Date.now, index: true },
+}, { timestamps: true });
+
+// Cash returned by agent after job(s) — unspent cash credited back
+const cashReturnSchema = new mongoose.Schema({
+  agent:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  amount:      { type: Number, required: true, min: 0 },
+  jobIds:      [{ type: mongoose.Schema.Types.ObjectId, ref: 'AgentJob' }], // jobs this return is linked to
+  note:        { type: String, maxlength: 500 },
+  recordedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  date:        { type: Date, default: Date.now, index: true },
+}, { timestamps: true });
+
+module.exports = {
+  Terminal:        mongoose.model('Terminal', terminalSchema),
+  User:            mongoose.model('User', userSchema),
+  Audit:           mongoose.model('Audit', auditSchema),
+  ImportRun:       mongoose.model('ImportRun', importSchema),
+  AgentJob:        mongoose.model('AgentJob', agentJobSchema),
+  CashWithdrawal:  mongoose.model('CashWithdrawal', cashWithdrawalSchema),
+  CashReturn:      mongoose.model('CashReturn', cashReturnSchema),
+};

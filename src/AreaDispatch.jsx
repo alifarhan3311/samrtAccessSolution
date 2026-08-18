@@ -1,5 +1,6 @@
 import React,{useEffect,useState}from'react';
 const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
+const money2=v=>'$'+Number(v||0).toLocaleString();
 
 export default function AreaDispatch({done}){
   const[areas,setAreas]=useState([]);
@@ -10,9 +11,11 @@ export default function AreaDispatch({done}){
   const[cashOverrides,setCashOverrides]=useState({});
   const[form,setForm]=useState({agentId:'',dueAt:'',note:''});
   const[msg,setMsg]=useState('');
+  const[bal,setBal]=useState(null);
 
   useEffect(()=>{
-    Promise.all([req('/location-areas'),req('/users/agents')]).then(([a,g])=>{setAreas(a);setAgents(g)});
+    Promise.all([req('/location-areas'),req('/users/agents'),req('/cash/available').catch(()=>null)])
+      .then(([a,g,b])=>{setAreas(a);setAgents(g);if(b)setBal(b);});
   },[]);
 
   async function choose(value){
@@ -49,12 +52,24 @@ export default function AreaDispatch({done}){
   }
 
   const total=selected.reduce((s,id)=>s+(cashOverrides[id]||0),0);
+  const available=bal?.available??null;
+  const overBudget=available!==null&&total>available;
 
   return <main className="area-page">
     <section className="area-control">
       <p className="eyebrow">ROUTE PLANNER</p>
       <h2>Assign a complete Location Area</h2>
       <p>Select North A, West C or another operational area. Every available ATM in its cities becomes part of the agent's route.</p>
+
+      {/* Available balance banner */}
+      {bal&&<div className={'balance-banner '+(bal.available<=0?'balance-warn':'balance-ok')} style={{marginBottom:16}}>
+        <div><small>AVAILABLE CASH TODAY</small><strong>{money2(bal.available)}</strong></div>
+        <div style={{fontSize:12,opacity:.8,lineHeight:1.6}}>
+          Withdrawn {money2(bal.withdrawn)} &nbsp;·&nbsp;
+          Dispatched {money2(bal.dispatched)} &nbsp;·&nbsp;
+          Returned {money2(bal.returned)}
+        </div>
+      </div>}
       <div className="area-fields">
         <label>Location Area
           <select value={area} onChange={e=>choose(e.target.value)}>
@@ -79,7 +94,7 @@ export default function AreaDispatch({done}){
         <div><small>AREA</small><b>{area}</b></div>
         <div><small>CITIES</small><b>{[...new Set(terminals.map(t=>t.current?.city||t.official?.city).filter(Boolean))].join(', ')||'Not available'}</b></div>
         <div><small>SELECTED ATMs</small><b>{selected.length}</b></div>
-        <div><small>TOTAL CASH TO HANDOVER</small><b>${total.toLocaleString()}</b></div>
+        <div><small>TOTAL CASH TO HANDOVER</small><b style={{color:overBudget?'#a63e36':'inherit'}}>{money2(total)}{overBudget?` ⚠ exceeds ${money2(available)} available`:''}</b></div>
       </div>
 
       <div className="area-list">
@@ -124,8 +139,10 @@ export default function AreaDispatch({done}){
         <textarea value={form.note} onChange={e=>setForm({...form,note:e.target.value})}/>
       </label>
       {msg&&<p className={msg.includes('assigned')?'success':'error'}>{msg}</p>}
-      <button className="dispatch-area" disabled={!selected.length||!form.agentId||!form.dueAt}>
-        Dispatch area route →
+      <button className="dispatch-area" disabled={!selected.length||!form.agentId||!form.dueAt||overBudget}>
+        {overBudget
+          ?`Insufficient balance — need ${money2(total-available)} more`
+          :'Dispatch area route →'}
       </button>
     </form>}
   </main>;
