@@ -1,1 +1,42 @@
-{"name":"atm-command-center","private":true,"version":"1.0.0","scripts":{"dev":"concurrently --names API,CLIENT --prefix-colors green,cyan \"npm:dev:server\" \"npm:dev:client\"","dev:server":"nodemon server/src/index.js","dev:client":"vite --host 0.0.0.0 --port 5321 --strictPort","seed:august":"node server/scripts/seed-august.js","sync:wish-amounts":"node server/scripts/sync-august-wish-amounts.js","seed:users":"node server/scripts/seed-demo-users.js","reset:fresh":"node server/scripts/reset-and-reimport.js","build":"vite build","start":"node server/src/index.js","test":"node --test server/test/*.test.js"},"dependencies":{"@vitejs/plugin-react":"latest","bcryptjs":"latest","cloudinary":"^2.10.0","compression":"latest","concurrently":"latest","cors":"latest","dotenv":"latest","express":"4.21.2","express-mongo-sanitize":"latest","express-rate-limit":"latest","helmet":"latest","jsonwebtoken":"latest","mongoose":"latest","multer":"latest","react":"latest","react-dom":"latest","react-router-dom":"latest","vite":"latest","xlsx":"latest","zod":"latest"},"devDependencies":{"nodemon":"latest"}}
+{
+    "name": "atm-command-center",
+    "private": true,
+    "version": "1.0.0",
+    "scripts": {
+        "dev": "concurrently --names API,CLIENT --prefix-colors green,cyan \"npm:dev:server\" \"npm:dev:client\"",
+        "dev:server": "nodemon server/src/index.js",
+        "dev:client": "vite --host 0.0.0.0 --port 5321 --strictPort",
+        "seed:august": "node server/scripts/seed-august.js",
+        "sync:wish-amounts": "node server/scripts/sync-august-wish-amounts.js",
+        "seed:users": "node server/scripts/seed-demo-users.js",
+        "reset:fresh": "node server/scripts/reset-and-reimport.js",
+        "build": "vite build",
+        "start": "node server/src/index.js",
+        "test": "node --test server/test/*.test.js"
+    },
+    "dependencies": {
+        "@vitejs/plugin-react": "latest",
+        "bcryptjs": "latest",
+        "cloudinary": "^2.10.0",
+        "compression": "latest",
+        "concurrently": "latest",
+        "cors": "latest",
+        "dotenv": "latest",
+        "express": "4.21.2",
+        "express-mongo-sanitize": "latest",
+        "express-rate-limit": "latest",
+        "helmet": "latest",
+        "jsonwebtoken": "latest",
+        "mongoose": "latest",
+        "multer": "latest",
+        "react": "latest",
+        "react-dom": "latest",
+        "react-router-dom": "latest",
+        "vite": "latest",
+        "xlsx": "latest",
+        "zod": "latest"
+    },
+    "devDependencies": {
+        "nodemon": "latest"
+    }
+}
