@@ -10,6 +10,7 @@ import AgentManagement from './AgentManagement.jsx';
 import OfficialImport from './OfficialImport.jsx';
 import Notifications from './Notifications.jsx';
 import CashLedger from './CashLedger.jsx';
+import Discrepancies from './Discrepancies.jsx';
 import'./style.css';
 import'./terminal.css';
 import'./history.css';
@@ -60,9 +61,9 @@ function Shell(){
     :[['dashboard','Overview','⌂'],['notifications','Notifications','●'],['terminals','Terminals','▦'],
       ['assign','ATM setup & location','⌖'],['dispatch','Single ATM dispatch','↗'],
       ['area','Area route dispatch','⌘'],['jobs','Agent jobs & history','▣'],
-      ...(admin?[['agents','Manage agents','☺'],['ledger','Cash ledger','$'],['history','ATM movement history','◷']]:[]),
+      ...(admin?[['agents','Manage agents','☺'],['ledger','Cash ledger','$'],['discrepancies','Cash discrepancies','⚠'],['history','ATM movement history','◷']]:[]),
       ['import','Official import','⇅']];
-  const titles={dashboard:'Command center',notifications:'Notifications & setup queue',terminals:'Terminal registry',assign:'ATM setup & current location',dispatch:'Single ATM dispatch',area:'Location area route dispatch',jobs:agent?'My jobs & completed history':'Agent jobs & assignment history',agents:'Agent management',ledger:'Cash ledger & flow',history:'ATM movement history',import:'Official data import'};
+  const titles={dashboard:'Command center',notifications:'Notifications & setup queue',terminals:'Terminal registry',assign:'ATM setup & current location',dispatch:'Single ATM dispatch',area:'Location area route dispatch',jobs:agent?'My jobs & completed history':'Agent jobs & assignment history',agents:'Agent management',ledger:'Cash ledger & flow',history:'ATM movement history',discrepancies:'Cash discrepancies & alerts',import:'Official data import'};
   return <div className="shell">
     <aside>
       <div className="logo"><div className="mark">S</div><div><b>Smart Access</b><small>COMMAND CENTER</small></div></div>
@@ -83,6 +84,7 @@ function Shell(){
       :page==='jobs'?<AgentJobs role={user.role}/>
       :page==='agents'?<AgentManagement/>
       :page==='ledger'?<CashLedger/>
+      :page==='discrepancies'?<Discrepancies/>
       :page==='history'?<AssignmentHistory/>
       :<OfficialImport/>}
     </section>
@@ -125,6 +127,19 @@ function Dashboard({go}){
       <article className="stat" style={{borderTop:'3px solid #8b5cf6'}}><p>Net cash out today</p><strong style={{color:(today.balance||0)>=0?'#a63e36':'#267249'}}>{money(Math.abs(today.balance||0))}</strong><small>{(today.balance||0)>=0?'Dispatched exceeds returned':'Surplus returned'}</small></article>
       <article className="stat" style={{borderTop:'3px solid #78909c'}}><p>Open jobs</p><strong>{jobs.open||0}</strong><small>{jobs.pendingApproval||0} awaiting approval</small></article>
     </div>
+
+    {/* Discrepancy alert banner */}
+    {(d.discrepancies?.open||0)>0&&<div style={{background:'#fdecea',border:'1px solid #f5b7b1',borderRadius:10,padding:'14px 18px',marginTop:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <div>
+        <p style={{margin:0,fontSize:11,fontWeight:800,letterSpacing:'1px',color:'#922b21',textTransform:'uppercase'}}>⚠ CASH DISCREPANCY ALERTS</p>
+        <p style={{margin:'4px 0 0',fontSize:14,color:'#7b241c'}}>
+          <b>{d.discrepancies.open}</b> open alert{d.discrepancies.open!==1?'s':''} — total shortfall <b style={{color:'#a63e36'}}>${(d.discrepancies.totalShortfall||0).toLocaleString()}</b>
+        </p>
+      </div>
+      <button onClick={()=>go('discrepancies')} style={{border:0,borderRadius:8,background:'#a63e36',color:'#fff',padding:'10px 16px',fontWeight:700,cursor:'pointer',flexShrink:0}}>
+        Review alerts &#8594;
+      </button>
+    </div>}
 
     <div className="grid" style={{marginTop:14}}>
       <article>

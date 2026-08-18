@@ -66,12 +66,32 @@ const cashReturnSchema = new mongoose.Schema({
   date:        { type: Date, default: Date.now, index: true },
 }, { timestamps: true });
 
+// Cash discrepancy — detected on import by comparing expected vs actual ATM balance
+const cashDiscrepancySchema = new mongoose.Schema({
+  terminalId:       { type: String, required: true, index: true },
+  terminal:         { type: mongoose.Schema.Types.ObjectId, ref: 'Terminal' },
+  job:              { type: mongoose.Schema.Types.ObjectId, ref: 'AgentJob' },
+  agent:            { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  importRunId:      { type: mongoose.Schema.Types.ObjectId, ref: 'ImportRun' },
+  balanceBeforeJob: { type: Number, default: 0 },   // ATM balance snapshot before job
+  cashLoadedByAgent:{ type: Number, default: 0 },   // agent reported
+  expectedBalance:  { type: Number, default: 0 },   // balanceBeforeJob + cashLoadedByAgent
+  actualBalance:    { type: Number, default: 0 },   // this import's cashBalance
+  discrepancy:      { type: Number, default: 0 },   // expectedBalance - actualBalance (positive = shortfall)
+  status:    { type: String, enum: ['open','resolved','dismissed'], default: 'open', index: true },
+  resolvedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  resolvedAt:  Date,
+  resolveNote: { type: String, maxlength: 1000 },
+  detectedAt:  { type: Date, default: Date.now, index: true },
+}, { timestamps: true });
+
 module.exports = {
-  Terminal:        mongoose.model('Terminal', terminalSchema),
-  User:            mongoose.model('User', userSchema),
-  Audit:           mongoose.model('Audit', auditSchema),
-  ImportRun:       mongoose.model('ImportRun', importSchema),
-  AgentJob:        mongoose.model('AgentJob', agentJobSchema),
-  CashWithdrawal:  mongoose.model('CashWithdrawal', cashWithdrawalSchema),
-  CashReturn:      mongoose.model('CashReturn', cashReturnSchema),
+  Terminal:           mongoose.model('Terminal', terminalSchema),
+  User:               mongoose.model('User', userSchema),
+  Audit:              mongoose.model('Audit', auditSchema),
+  ImportRun:          mongoose.model('ImportRun', importSchema),
+  AgentJob:           mongoose.model('AgentJob', agentJobSchema),
+  CashWithdrawal:     mongoose.model('CashWithdrawal', cashWithdrawalSchema),
+  CashReturn:         mongoose.model('CashReturn', cashReturnSchema),
+  CashDiscrepancy:    mongoose.model('CashDiscrepancy', cashDiscrepancySchema),
 };

@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express'); const mongoose = require('mongoose'); const bcrypt = require('bcryptjs'); const crypto = require('crypto');
 const helmet = require('helmet'); const cors = require('cors'); const compression = require('compression'); const rateLimit = require('express-rate-limit'); const mongoSanitize = require('express-mongo-sanitize'); const multer = require('multer'); const { z } = require('zod');
-const { Terminal, User, Audit, ImportRun, AgentJob, CashWithdrawal, CashReturn } = require('./models'); const { sign, auth, permit, audit } = require('./security'); const { importWorkbook } = require('./importer'); const { uploadBuffer, deleteFile } = require('./cloudinary');
+const { Terminal, User, Audit, ImportRun, AgentJob, CashWithdrawal, CashReturn, CashDiscrepancy } = require('./models'); const { sign, auth, permit, audit } = require('./security'); const { importWorkbook } = require('./importer'); const { uploadBuffer, deleteFile } = require('./cloudinary');
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) { console.error('JWT_SECRET must contain at least 32 characters'); if (require.main === module) process.exit(1); }
 const app = express(); app.set('trust proxy', 1); app.use(helmet()); app.use(compression()); app.use(cors({ origin: process.env.CLIENT_ORIGIN?.split(',') || false })); app.use(express.json({ limit: '1mb' })); app.use(mongoSanitize());
 app.use('/api/auth', rateLimit({ windowMs: 15*60*1000, limit: 20, standardHeaders: true, legacyHeaders: false }));
@@ -35,7 +35,8 @@ app.get('/api/dashboard',auth,async(req,res,next)=>{try{
          todayActualLoaded, monthActualLoaded,
          todayReturned, monthReturned,
          openJobs, pendingApproval,
-         agentStats
+         agentStats,
+         openDiscrepancies, totalShortfall
         ] = await Promise.all([
     Terminal.countDocuments(),
     Terminal.countDocuments({'official.status':'Active'}),
@@ -62,6 +63,8 @@ app.get('/api/dashboard',auth,async(req,res,next)=>{try{
     AgentJob.countDocuments({status:'cash_loaded'}),
     // per-agent stats this month
     AgentJob.aggregate([{$match:{createdAt:{$gte:monthStart}}},{$group:{_id:'$agent',jobsAssigned:{$sum:1},jobsApproved:{$sum:{$cond:[{$eq:['$status','approved']},1,0]}},totalDispatched:{$sum:'$cashToLoad'}}},{$lookup:{from:'users',localField:'_id',foreignField:'_id',as:'user'}},{$unwind:'$user'},{$project:{name:'$user.name',jobsAssigned:1,jobsApproved:1,totalDispatched:1}},{$sort:{totalDispatched:-1}},{$limit:10}]),
+    CashDiscrepancy.countDocuments({status:'open'}),
+    CashDiscrepancy.aggregate([{$match:{status:'open',discrepancy:{$gt:0}}},{$group:{_id:null,total:{$sum:'$discrepancy'}}}]).then(r=>r[0]?.total||0),
   ]);
 
   res.json({
@@ -75,6 +78,7 @@ app.get('/api/dashboard',auth,async(req,res,next)=>{try{
     },
     jobs:{ open:openJobs, pendingApproval },
     agents: agentStats,
+    discrepancies:{ open:openDiscrepancies, totalShortfall },
   });
 }catch(e){next(e)}});
 app.get('/api/notifications',auth,async(req,res,next)=>{try{const [setup,lowCash,missing,latestImport]=await Promise.all([Terminal.find({setupRequired:true}).select('terminalId official.status official.name official.address official.city official.locationArea official.cashBalance official.lastCommunication official.lastWithdrawalAt setupReason createdAt').sort({createdAt:-1}).limit(200),Terminal.find({'alert.enabled':true,$expr:{$lte:['$official.cashBalance','$alert.threshold']}}).select('terminalId official.name official.address official.city official.cashBalance alert.threshold').sort({'official.cashBalance':1}).limit(200),Terminal.find({'official.sourcePresent':false}).select('terminalId official.name official.address official.city official.lastSyncedAt').sort({'official.lastSyncedAt':-1}).limit(100),ImportRun.findOne().sort({createdAt:-1}).select('fileName changes totals createdAt').lean()]);const recentChanges=latestImport?.changes||[];res.json({setup,lowCash,missing,recentChanges,latestImport:latestImport?{fileName:latestImport.fileName,createdAt:latestImport.createdAt,totals:latestImport.totals}:null,total:setup.length+lowCash.length+missing.length+recentChanges.length});}catch(e){next(e)}});
@@ -144,6 +148,28 @@ app.get('/api/cash/ledger',auth,permit('admin','manager'),async(req,res,next)=>{
   const totalDispatched=dispatched.reduce((s,d)=>s+d.dispatched,0);
   const totalLoaded=actualLoaded.reduce((s,d)=>s+d.loaded,0);
   res.json({from,to,totalWithdrawn,totalDispatched,totalLoaded,totalReturned,netCashOut:totalDispatched-totalReturned,withdrawals,returns,dispatched,actualLoaded,returnsByAgent});
+}catch(e){next(e)}});
+
+// ── Cash Discrepancies ───────────────────────────────────────────────────────
+app.get('/api/discrepancies',auth,permit('admin','manager'),async(req,res,next)=>{try{
+  const q={};
+  if(req.query.status)q.status=req.query.status; else q.status='open';
+  if(req.query.terminalId)q.terminalId=req.query.terminalId.toUpperCase();
+  const items=await CashDiscrepancy.find(q).sort({detectedAt:-1}).limit(100)
+    .populate('agent','name email')
+    .populate('job','terminalId businessName cashToLoad approvedAt')
+    .populate('resolvedBy','name');
+  const openCount=await CashDiscrepancy.countDocuments({status:'open'});
+  const totalShortfall=await CashDiscrepancy.aggregate([{$match:{status:'open',discrepancy:{$gt:0}}},{$group:{_id:null,total:{$sum:'$discrepancy'}}}]).then(r=>r[0]?.total||0);
+  res.json({items,openCount,totalShortfall});
+}catch(e){next(e)}});
+
+app.patch('/api/discrepancies/:id',auth,permit('admin','manager'),async(req,res,next)=>{try{
+  const{status,resolveNote}=z.object({status:z.enum(['resolved','dismissed']),resolveNote:z.string().max(1000).optional()}).parse(req.body);
+  const d=await CashDiscrepancy.findByIdAndUpdate(req.params.id,{$set:{status,resolveNote,resolvedBy:req.user._id,resolvedAt:new Date()}},{new:true}).populate('agent','name').populate('job','terminalId businessName');
+  if(!d)return res.status(404).json({message:'Discrepancy not found'});
+  await audit(req,'DISCREPANCY_RESOLVED','CashDiscrepancy',d.id,{terminalId:d.terminalId,status,discrepancy:d.discrepancy});
+  res.json(d);
 }catch(e){next(e)}});
 
 app.get('/api/imports',auth,async(req,res,next)=>{try{res.json(await ImportRun.find().sort({createdAt:-1}).limit(20).populate('importedBy','name'));}catch(e){next(e)}});app.get('/api/audit',auth,permit('admin'),async(req,res,next)=>{try{res.json(await Audit.find().sort({createdAt:-1}).limit(100).populate('actor','name email'));}catch(e){next(e)}});
