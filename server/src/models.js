@@ -18,6 +18,11 @@ const terminalSchema = new mongoose.Schema({
     tempName: String, name: String, address: String, city: String, locationArea: String,
     wishAmount: Number, cashBalance: Number, cashLoading: Number, agent: String, notesTask: String,
     lastCommunication: String, lastWithdrawalAt: Date, sourcePresent: { type: Boolean, default: true },
+    // Terminal Management file fields
+    lastTransData: String, lastTransTime: Date,
+    totalCassetteValue: Number, totalCassetteCount: Number,
+    lastSettledTime: Date, withdrawalCount: Number,
+    dispensedAmount: Number, terminalModel: String,
     raw: mongoose.Schema.Types.Mixed, lastSyncedAt: Date
   },
   original: { businessName: String, address: String, city: String },
