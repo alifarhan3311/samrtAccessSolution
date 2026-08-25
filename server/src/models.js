@@ -15,7 +15,7 @@ const terminalSchema = new mongoose.Schema({
   terminalId: { type: String, required: true, unique: true, uppercase: true, trim: true, index: true },
   official: {
     status: { type: String, enum: ['Active', 'Inactive', 'Unknown'], default: 'Unknown' },
-    tempName: String, name: String, address: String, city: String, locationArea: String,
+    tempName: String, name: String, address: String, city: String, locationArea: { type: String, index: true },
     wishAmount: Number, cashBalance: Number, cashLoading: Number, agent: String, notesTask: String,
     lastCommunication: String, lastWithdrawalAt: Date, sourcePresent: { type: Boolean, default: true },
     // Terminal Management file fields

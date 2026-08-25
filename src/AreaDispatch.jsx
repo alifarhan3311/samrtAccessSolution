@@ -12,6 +12,7 @@ export default function AreaDispatch({done}){
   const[form,setForm]=useState({agentId:'',dueAt:'',note:''});
   const[msg,setMsg]=useState('');
   const[bal,setBal]=useState(null);
+  const[loadingTerminals,setLoadingTerminals]=useState(false);
 
   useEffect(()=>{
     Promise.all([req('/location-areas'),req('/users/agents'),req('/cash/available').catch(()=>null)])
@@ -21,13 +22,20 @@ export default function AreaDispatch({done}){
   async function choose(value){
     setArea(value);setSelected([]);setTerminals([]);setCashOverrides({});setMsg('');
     if(!value)return;
-    const items=await req('/location-areas/'+encodeURIComponent(value)+'/terminals');
-    setTerminals(items);
-    setSelected(items.filter(t=>!t.activeJob&&t.official?.status!=='Inactive').map(t=>t.terminalId));
-    // set default cash overrides from requiredCash
-    const defaults={};
-    items.forEach(t=>{ defaults[t.terminalId]=t.requiredCash||0; });
-    setCashOverrides(defaults);
+    setLoadingTerminals(true);
+    try{
+      const items=await req('/location-areas/'+encodeURIComponent(value)+'/terminals');
+      setTerminals(items);
+      setSelected(items.filter(t=>!t.activeJob&&t.official?.status!=='Inactive').map(t=>t.terminalId));
+      // set default cash overrides from requiredCash
+      const defaults={};
+      items.forEach(t=>{ defaults[t.terminalId]=t.requiredCash||0; });
+      setCashOverrides(defaults);
+    }catch(e){
+      setMsg(e.message);
+    }finally{
+      setLoadingTerminals(false);
+    }
   }
 
   function toggle(id){setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);}
@@ -73,7 +81,7 @@ export default function AreaDispatch({done}){
       </div>}
       <div className="area-fields">
         <label>Location Area
-          <select value={area} onChange={e=>choose(e.target.value)}>
+          <select value={area} onChange={e=>choose(e.target.value)} disabled={loadingTerminals}>
             <option value="">Select area...</option>
             {areas.map(a=><option key={a.name} value={a.name}>{a.name} — {a.terminals} ATMs</option>)}
           </select>
@@ -90,7 +98,12 @@ export default function AreaDispatch({done}){
       </div>
     </section>
 
-    {area&&<form onSubmit={send}>
+    {loadingTerminals&&<div className="area-loading-card">
+      <div className="area-spinner"></div>
+      <p>Fetching ATMs and building route checklist for <b>{area}</b>...</p>
+    </div>}
+
+    {area&&!loadingTerminals&&<form onSubmit={send}>
       <div className="route-summary">
         <div><small>AREA</small><b>{area}</b></div>
         <div><small>CITIES</small><b>{[...new Set(terminals.map(t=>t.current?.city||t.official?.city).filter(Boolean))].join(', ')||'Not available'}</b></div>
