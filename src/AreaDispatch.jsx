@@ -32,9 +32,10 @@ export default function AreaDispatch({done}){
 
   function toggle(id){setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);}
 
-  function setCash(terminalId, value){
-    const num=Math.max(0,Number(value)||0);
-    setCashOverrides(prev=>({...prev,[terminalId]:num}));
+  function setBills(terminalId, billsCount){
+    const bills=Math.max(0,parseInt(billsCount,10)||0);
+    const totalCad=bills*20;
+    setCashOverrides(prev=>({...prev,[terminalId]:totalCad}));
   }
 
   async function send(e){
@@ -44,7 +45,7 @@ export default function AreaDispatch({done}){
         ...form,
         locationArea:area,
         terminalIds:selected,
-        cashOverrides, // per-terminal cash amounts
+        cashOverrides, // per-terminal cash amounts in CAD
       })});
       setMsg(`${result.assigned} ATMs assigned. Total cash to handover: $${result.totalCash.toLocaleString()}. ${result.skippedLocked} locked ATM(s) skipped.`);
       setTimeout(()=>done?.(),1200);
@@ -107,6 +108,9 @@ export default function AreaDispatch({done}){
           const isInactive=t.official?.status==='Inactive';
           const isDisabled=Boolean(t.activeJob||isInactive);
           const isSelected=selected.includes(t.terminalId);
+          const currentCad=cashOverrides[t.terminalId]??t.requiredCash??0;
+          const currentBills=Math.floor(currentCad/20);
+
           return <label key={t.terminalId} className={isDisabled?'locked-atm':''}>
             <input type="checkbox" disabled={isDisabled} checked={isSelected} onChange={()=>toggle(t.terminalId)}/>
             <div>
@@ -126,17 +130,20 @@ export default function AreaDispatch({done}){
               : t.activeJob
               ? <strong style={{color:'#999'}}>Assigned: {t.activeJob.agent?.name}</strong>
               : <div className="cash-override">
-                  <small>CASH TO LOAD (CAD)</small>
-                  <input
-                    type="number"
-                    min="0"
-                    step="20"
-                    value={cashOverrides[t.terminalId]??t.requiredCash??0}
-                    onChange={e=>setCash(t.terminalId,e.target.value)}
-                    disabled={!isSelected}
-                    onClick={e=>e.stopPropagation()}
-                    style={{width:'110px',padding:'4px 8px',fontWeight:'700',fontSize:'14px',border:'1.5px solid #ccc',borderRadius:'6px',textAlign:'right'}}
-                  />
+                  <small>BILLS TO LOAD (20s)</small>
+                  <div className="bills-input-wrap">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="0"
+                      value={currentBills}
+                      onChange={e=>setBills(t.terminalId,e.target.value)}
+                      disabled={!isSelected}
+                      onClick={e=>e.stopPropagation()}
+                    />
+                    <span className="cad-equiv">= {money2(currentCad)}</span>
+                  </div>
                 </div>
             }
           </label>;
