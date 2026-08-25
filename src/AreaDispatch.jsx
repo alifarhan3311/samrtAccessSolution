@@ -23,7 +23,7 @@ export default function AreaDispatch({done}){
     if(!value)return;
     const items=await req('/location-areas/'+encodeURIComponent(value)+'/terminals');
     setTerminals(items);
-    setSelected(items.filter(t=>!t.activeJob).map(t=>t.terminalId));
+    setSelected(items.filter(t=>!t.activeJob&&t.official?.status!=='Inactive').map(t=>t.terminalId));
     // set default cash overrides from requiredCash
     const defaults={};
     items.forEach(t=>{ defaults[t.terminalId]=t.requiredCash||0; });
@@ -100,22 +100,26 @@ export default function AreaDispatch({done}){
       <div className="area-list">
         <div className="area-list-head">
           <h3>ATM route checklist</h3>
-          <button type="button" onClick={()=>setSelected(terminals.filter(t=>!t.activeJob).map(t=>t.terminalId))}>Select all available</button>
+          <button type="button" onClick={()=>setSelected(terminals.filter(t=>!t.activeJob&&t.official?.status!=='Inactive').map(t=>t.terminalId))}>Select all available active</button>
         </div>
 
         {terminals.map(t=>{
+          const isInactive=t.official?.status==='Inactive';
+          const isDisabled=Boolean(t.activeJob||isInactive);
           const isSelected=selected.includes(t.terminalId);
-          return <label key={t.terminalId} className={t.activeJob?'locked-atm':''}>
-            <input type="checkbox" disabled={!!t.activeJob} checked={isSelected} onChange={()=>toggle(t.terminalId)}/>
+          return <label key={t.terminalId} className={isDisabled?'locked-atm':''}>
+            <input type="checkbox" disabled={isDisabled} checked={isSelected} onChange={()=>toggle(t.terminalId)}/>
             <div>
-              <b>{t.terminalId} · {t.current?.businessName||t.official?.name}</b>
+              <b>{t.terminalId} · {t.current?.businessName||t.official?.name} {isInactive&&<span style={{color:'#a63e36',fontSize:11,fontWeight:800,marginLeft:6}}>(INACTIVE)</span>}</b>
               <span>{t.current?.address||t.official?.address} · {t.current?.city||t.official?.city}</span>
             </div>
             <section>
               <small>WISH / BALANCE</small>
               <b>${(t.official?.wishAmount||0).toLocaleString()} / ${(t.official?.cashBalance||0).toLocaleString()}</b>
             </section>
-            {t.activeJob
+            {isInactive
+              ? <strong style={{color:'#a63e36'}}>Inactive — Activate first</strong>
+              : t.activeJob
               ? <strong style={{color:'#999'}}>Assigned: {t.activeJob.agent?.name}</strong>
               : <div className="cash-override">
                   <small>CASH TO LOAD (CAD)</small>

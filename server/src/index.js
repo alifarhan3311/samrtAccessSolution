@@ -85,19 +85,19 @@ app.get('/api/notifications',auth,async(req,res,next)=>{try{const [setup,lowCash
 app.get('/api/terminals',auth,async(req,res,next)=>{try{const page=Math.max(1,+req.query.page||1),limit=Math.min(100,Math.max(1,+req.query.limit||25));const q={};if(req.query.search){const s=String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');q.$or=[{terminalId:new RegExp(s,'i')},{'current.businessName':new RegExp(s,'i')},{'current.city':new RegExp(s,'i')},{'current.address':new RegExp(s,'i')}];}if(req.query.status)q['official.status']=req.query.status;if(req.query.city)q['current.city']=new RegExp(`^${String(req.query.city).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`,'i');const [items,total]=await Promise.all([Terminal.find(q).sort({terminalId:1}).skip((page-1)*limit).limit(limit),Terminal.countDocuments(q)]);res.json({items,total,page,pages:Math.ceil(total/limit)});}catch(e){next(e)}});
 app.get('/api/terminals/:id',auth,async(req,res,next)=>{try{const item=await Terminal.findOne({terminalId:req.params.id.toUpperCase()}).populate('assignmentHistory.assignedBy','name email');if(!item)return res.status(404).json({message:'Terminal not found'});res.json(item);}catch(e){next(e)}});
 app.patch('/api/terminals/:id/status',auth,permit('admin','manager'),async(req,res,next)=>{try{const {status}=z.object({status:z.enum(['Active','Inactive'])}).parse(req.body);const t=await Terminal.findOneAndUpdate({terminalId:req.params.id.toUpperCase()},{$set:{'official.status':status}},{new:true});if(!t)return res.status(404).json({message:'Terminal not found'});await audit(req,'TERMINAL_STATUS_CHANGED','Terminal',t.id,{terminalId:t.terminalId,status});res.json(t);}catch(e){next(e)}});
-app.post('/api/terminals/:id/assign',auth,permit('admin','manager'),async(req,res,next)=>{try{const b=z.object({businessName:z.string().min(2).max(150),address:z.string().min(3).max(250),city:z.string().min(2).max(100),wishAmount:z.number().nonnegative(),paymentAmount:z.number().nonnegative().optional(),note:z.string().max(1000).optional(),agentId:z.string().optional(),cashToLoad:z.number().nonnegative().optional(),dueAt:z.string().optional()}).parse(req.body);const t=await Terminal.findOne({terminalId:req.params.id.toUpperCase()});if(!t)return res.status(404).json({message:'Terminal not found'});let agent;if(b.agentId){agent=await User.findOne({_id:b.agentId,role:'agent',active:true});if(!agent)return res.status(400).json({message:'Selected agent is unavailable'});if(b.cashToLoad==null||!b.dueAt)return res.status(400).json({message:'Cash to load and due time are required when assigning an agent'});}const now=new Date();const last=t.assignmentHistory.at(-1);if(last&&!last.endedAt)last.endedAt=now;t.assignmentHistory.push({businessName:b.businessName,address:b.address,city:b.city,paymentAmount:b.paymentAmount??b.wishAmount,note:b.note,assignedAt:now,assignedBy:req.user._id});t.official.tempName=b.businessName;t.official.wishAmount=b.wishAmount;t.current={businessName:b.businessName,address:b.address,city:b.city,paymentAmount:b.paymentAmount??b.wishAmount,assignedAt:now};t.alert={enabled:true,threshold:b.wishAmount};t.setupRequired=false;t.setupReason=undefined;await t.save();let job=null;if(agent)job=await AgentJob.create({terminal:t._id,terminalId:t.terminalId,agent:agent._id,assignedBy:req.user._id,businessName:b.businessName,address:b.address,city:b.city,wishAmount:b.wishAmount,cashToLoad:b.cashToLoad,dueAt:new Date(b.dueAt),events:[{status:'assigned',note:b.note,createdBy:req.user._id}]});await audit(req,'TERMINAL_ASSIGNED','Terminal',t.id,{terminalId:t.terminalId,to:b.businessName,agent:agent?.email,cashToLoad:b.cashToLoad,wishAmount:b.wishAmount,jobId:job?.id});res.json({terminal:t,job});}catch(e){next(e)}});
+app.post('/api/terminals/:id/assign',auth,permit('admin','manager'),async(req,res,next)=>{try{const b=z.object({businessName:z.string().min(2).max(150),address:z.string().min(3).max(250),city:z.string().min(2).max(100),wishAmount:z.number().nonnegative(),paymentAmount:z.number().nonnegative().optional(),note:z.string().max(1000).optional(),agentId:z.string().optional(),cashToLoad:z.number().nonnegative().optional(),dueAt:z.string().optional()}).parse(req.body);const t=await Terminal.findOne({terminalId:req.params.id.toUpperCase()});if(!t)return res.status(404).json({message:'Terminal not found'});let agent;if(b.agentId){if(t.official?.status==='Inactive')return res.status(400).json({message:`Cannot assign agent: Terminal ${t.terminalId} is currently Inactive. Please activate the terminal first.`});agent=await User.findOne({_id:b.agentId,role:'agent',active:true});if(!agent)return res.status(400).json({message:'Selected agent is unavailable'});if(b.cashToLoad==null||!b.dueAt)return res.status(400).json({message:'Cash to load and due time are required when assigning an agent'});}const now=new Date();const last=t.assignmentHistory.at(-1);if(last&&!last.endedAt)last.endedAt=now;t.assignmentHistory.push({businessName:b.businessName,address:b.address,city:b.city,paymentAmount:b.paymentAmount??b.wishAmount,note:b.note,assignedAt:now,assignedBy:req.user._id});t.official.tempName=b.businessName;t.official.wishAmount=b.wishAmount;t.current={businessName:b.businessName,address:b.address,city:b.city,paymentAmount:b.paymentAmount??b.wishAmount,assignedAt:now};t.alert={enabled:true,threshold:b.wishAmount};t.setupRequired=false;t.setupReason=undefined;await t.save();let job=null;if(agent)job=await AgentJob.create({terminal:t._id,terminalId:t.terminalId,agent:agent._id,assignedBy:req.user._id,businessName:b.businessName,address:b.address,city:b.city,wishAmount:b.wishAmount,cashToLoad:b.cashToLoad,dueAt:new Date(b.dueAt),events:[{status:'assigned',note:b.note,createdBy:req.user._id}]});await audit(req,'TERMINAL_ASSIGNED','Terminal',t.id,{terminalId:t.terminalId,to:b.businessName,agent:agent?.email,cashToLoad:b.cashToLoad,wishAmount:b.wishAmount,jobId:job?.id});res.json({terminal:t,job});}catch(e){next(e)}});
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024},fileFilter:(req,file,cb)=>cb(null,/\.(xlsx|xls)$/i.test(file.originalname))});
 const proofUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024,files:4},fileFilter:(req,file,cb)=>cb(null,['image/jpeg','image/png','image/webp','application/pdf'].includes(file.mimetype))});
 app.post('/api/imports',auth,permit('admin'),upload.single('file'),async(req,res,next)=>{try{if(!req.file)return res.status(400).json({message:'Excel file required'});const result=await importWorkbook(req.file.buffer,req.file.originalname,req.user._id);await audit(req,'OFFICIAL_IMPORT','ImportRun',result.runId,result);res.status(201).json(result);}catch(e){next(e)}});
 app.get('/api/jobs',auth,async(req,res,next)=>{try{const q=req.user.role==='agent'?{agent:req.user._id}:{};if(req.query.status)q.status=req.query.status;if(req.query.search){const rx=new RegExp(String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');q.$or=[{terminalId:rx},{businessName:rx},{city:rx}];}const items=await AgentJob.find(q).sort({dueAt:1,createdAt:-1}).limit(1000).populate('agent','name email').populate('assignedBy','name email').populate('events.createdBy','name email');res.json(items);}catch(e){next(e)}});
 app.get('/api/jobs/active-terminal/:terminalId',auth,async(req,res,next)=>{try{const job=await AgentJob.findOne({terminalId:req.params.terminalId.toUpperCase(),status:{$nin:['approved','cancelled']}}).populate('agent','name email').select('terminalId agent status dueAt businessName');res.json({busy:Boolean(job),job});}catch(e){next(e)}});
 app.get('/api/location-areas',auth,async(req,res,next)=>{try{const areas=await Terminal.aggregate([{$match:{'official.locationArea':{$nin:[null,'']},'official.sourcePresent':true}},{$group:{_id:'$official.locationArea',terminals:{$sum:1},cities:{$addToSet:{$ifNull:['$official.city','$current.city']}}}},{$sort:{_id:1}}]);res.json(areas.map(a=>({name:a._id,terminals:a.terminals,cities:a.cities.filter(Boolean)})));}catch(e){next(e)}});
-app.get('/api/location-areas/:area/terminals',auth,async(req,res,next)=>{try{const area=String(req.params.area);const terminals=await Terminal.find({'official.locationArea':area,'official.sourcePresent':true}).select('terminalId official.name official.locationArea official.wishAmount official.cashBalance official.city current.businessName current.address current.city').sort({'official.city':1,terminalId:1}).lean();const active=await AgentJob.find({terminalId:{$in:terminals.map(t=>t.terminalId)},status:{$nin:['approved','cancelled']}}).select('terminalId agent status').populate('agent','name').lean();const jobs=new Map(active.map(j=>[j.terminalId,j]));res.json(terminals.map(t=>({...t,current:{...t.current,city:t.current?.city||t.official?.city||''},requiredCash:Math.max(0,(t.official?.wishAmount||0)-(t.official?.cashBalance||0)),activeJob:jobs.get(t.terminalId)||null})));}catch(e){next(e)}});
-app.post('/api/jobs/dispatch',auth,permit('admin','manager'),async(req,res,next)=>{try{const b=z.object({terminalId:z.string().min(2),agentId:z.string().min(2),cashToLoad:z.number().nonnegative(),dueAt:z.string().min(1),note:z.string().max(2000).optional()}).parse(req.body);const [terminal,agent]=await Promise.all([Terminal.findOne({terminalId:b.terminalId.toUpperCase()}),User.findOne({_id:b.agentId,role:'agent',active:true})]);if(!terminal)return res.status(404).json({message:'Terminal not found'});if(!agent)return res.status(400).json({message:'Selected agent is unavailable'});const terminalJob=await AgentJob.findOne({terminalId:terminal.terminalId,status:{$nin:['approved','cancelled']}}).populate('agent','name');if(terminalJob)return res.status(409).json({message:`${terminal.terminalId} is already assigned to ${terminalJob.agent?.name||'an agent'}. Complete and approve that job first.`});
+app.get('/api/location-areas/:area/terminals',auth,async(req,res,next)=>{try{const area=String(req.params.area);const terminals=await Terminal.find({'official.locationArea':area,'official.sourcePresent':true}).select('terminalId official.status official.name official.locationArea official.wishAmount official.cashBalance official.city current.businessName current.address current.city').sort({'official.city':1,terminalId:1}).lean();const active=await AgentJob.find({terminalId:{$in:terminals.map(t=>t.terminalId)},status:{$nin:['approved','cancelled']}}).select('terminalId agent status').populate('agent','name').lean();const jobs=new Map(active.map(j=>[j.terminalId,j]));res.json(terminals.map(t=>({...t,current:{...t.current,city:t.current?.city||t.official?.city||''},requiredCash:Math.max(0,(t.official?.wishAmount||0)-(t.official?.cashBalance||0)),activeJob:jobs.get(t.terminalId)||null})));}catch(e){next(e)}});
+app.post('/api/jobs/dispatch',auth,permit('admin','manager'),async(req,res,next)=>{try{const b=z.object({terminalId:z.string().min(2),agentId:z.string().min(2),cashToLoad:z.number().nonnegative(),dueAt:z.string().min(1),note:z.string().max(2000).optional()}).parse(req.body);const [terminal,agent]=await Promise.all([Terminal.findOne({terminalId:b.terminalId.toUpperCase()}),User.findOne({_id:b.agentId,role:'agent',active:true})]);if(!terminal)return res.status(404).json({message:'Terminal not found'});if(terminal.official?.status==='Inactive')return res.status(400).json({message:`Cannot dispatch job: Terminal ${terminal.terminalId} is currently Inactive. Please activate the terminal in Terminal Registry first.`});if(!agent)return res.status(400).json({message:'Selected agent is unavailable'});const terminalJob=await AgentJob.findOne({terminalId:terminal.terminalId,status:{$nin:['approved','cancelled']}}).populate('agent','name');if(terminalJob)return res.status(409).json({message:`${terminal.terminalId} is already assigned to ${terminalJob.agent?.name||'an agent'}. Complete and approve that job first.`});
 // ── Balance check ──────────────────────────────────────────────────────────
 if(b.cashToLoad>0){const today=new Date();today.setHours(0,0,0,0);const tomorrow=new Date(today);tomorrow.setDate(tomorrow.getDate()+1);const dq={date:{$gte:today,$lt:tomorrow}};const jq={createdAt:{$gte:today,$lt:tomorrow}};const[withdrawn,alreadyDispatched,returned]=await Promise.all([CashWithdrawal.aggregate([{$match:dq},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0),AgentJob.aggregate([{$match:jq},{$group:{_id:null,total:{$sum:'$cashToLoad'}}}]).then(r=>r[0]?.total||0),CashReturn.aggregate([{$match:dq},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0)]);const available=withdrawn-alreadyDispatched+returned;if(b.cashToLoad>available)return res.status(400).json({message:`Insufficient cash balance. Available today: $${available.toLocaleString()} (Withdrawn: $${withdrawn.toLocaleString()}, Already dispatched: $${alreadyDispatched.toLocaleString()}, Returned: $${returned.toLocaleString()})`,available,withdrawn,alreadyDispatched,returned});}
 const job=await AgentJob.create({terminal:terminal._id,terminalId:terminal.terminalId,agent:agent._id,assignedBy:req.user._id,businessName:terminal.current?.businessName||terminal.official?.tempName||terminal.original?.businessName,address:terminal.current?.address||terminal.original?.address,city:terminal.current?.city||terminal.original?.city,wishAmount:terminal.official?.wishAmount||terminal.alert?.threshold||0,cashToLoad:b.cashToLoad,dueAt:new Date(b.dueAt),events:[{status:'assigned',note:b.note,createdBy:req.user._id}]});await audit(req,'DAILY_AGENT_DISPATCHED','AgentJob',job.id,{terminalId:terminal.terminalId,agent:agent.email,cashToLoad:b.cashToLoad,dueAt:b.dueAt});res.status(201).json(await job.populate('agent','name email'));}catch(e){next(e)}});
-app.post('/api/jobs/dispatch-area',auth,permit('admin','manager'),async(req,res,next)=>{try{const b=z.object({locationArea:z.string().min(1),agentId:z.string().min(2),dueAt:z.string().min(1),note:z.string().max(2000).optional(),terminalIds:z.array(z.string()).min(1),cashOverrides:z.record(z.string(),z.number().nonnegative()).optional()}).parse(req.body);const agent=await User.findOne({_id:b.agentId,role:'agent',active:true});if(!agent)return res.status(400).json({message:'Selected agent is unavailable'});const terminals=await Terminal.find({terminalId:{$in:b.terminalIds.map(id=>id.toUpperCase())},'official.locationArea':b.locationArea,'official.sourcePresent':true});const locked=await AgentJob.distinct('terminalId',{terminalId:{$in:terminals.map(t=>t.terminalId)},status:{$nin:['approved','cancelled']}});const lockedSet=new Set(locked);const eligible=terminals.filter(t=>!lockedSet.has(t.terminalId));if(!eligible.length)return res.status(409).json({message:'All selected ATMs already have active jobs'});
+app.post('/api/jobs/dispatch-area',auth,permit('admin','manager'),async(req,res,next)=>{try{const b=z.object({locationArea:z.string().min(1),agentId:z.string().min(2),dueAt:z.string().min(1),note:z.string().max(2000).optional(),terminalIds:z.array(z.string()).min(1),cashOverrides:z.record(z.string(),z.number().nonnegative()).optional()}).parse(req.body);const agent=await User.findOne({_id:b.agentId,role:'agent',active:true});if(!agent)return res.status(400).json({message:'Selected agent is unavailable'});const terminals=await Terminal.find({terminalId:{$in:b.terminalIds.map(id=>id.toUpperCase())},'official.locationArea':b.locationArea,'official.sourcePresent':true});const inactiveTerminals=terminals.filter(t=>t.official?.status==='Inactive');if(inactiveTerminals.length>0)return res.status(400).json({message:`Cannot dispatch area route: Terminal(s) ${inactiveTerminals.map(t=>t.terminalId).join(', ')} are currently Inactive. Please activate them first.`});const locked=await AgentJob.distinct('terminalId',{terminalId:{$in:terminals.map(t=>t.terminalId)},status:{$nin:['approved','cancelled']}});const lockedSet=new Set(locked);const eligible=terminals.filter(t=>!lockedSet.has(t.terminalId));if(!eligible.length)return res.status(409).json({message:'All selected ATMs already have active jobs'});
 // ── Balance check ──────────────────────────────────────────────────────────
 const totalRequested=eligible.reduce((s,t)=>{const def=Math.max(0,(t.official?.wishAmount||0)-(t.official?.cashBalance||0));return s+(b.cashOverrides?.[t.terminalId]??def)},0);
 if(totalRequested>0){const today=new Date();today.setHours(0,0,0,0);const tomorrow=new Date(today);tomorrow.setDate(tomorrow.getDate()+1);const dq={date:{$gte:today,$lt:tomorrow}};const jq={createdAt:{$gte:today,$lt:tomorrow}};const[withdrawn,alreadyDispatched,returned]=await Promise.all([CashWithdrawal.aggregate([{$match:dq},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0),AgentJob.aggregate([{$match:jq},{$group:{_id:null,total:{$sum:'$cashToLoad'}}}]).then(r=>r[0]?.total||0),CashReturn.aggregate([{$match:dq},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0)]);const available=withdrawn-alreadyDispatched+returned;if(totalRequested>available)return res.status(400).json({message:`Insufficient cash. This route needs $${totalRequested.toLocaleString()} but only $${available.toLocaleString()} available today. (Withdrawn: $${withdrawn.toLocaleString()}, Dispatched: $${alreadyDispatched.toLocaleString()}, Returned: $${returned.toLocaleString()})`,available,withdrawn,alreadyDispatched,returned,totalRequested});}
@@ -172,7 +172,211 @@ app.patch('/api/discrepancies/:id',auth,permit('admin','manager'),async(req,res,
   res.json(d);
 }catch(e){next(e)}});
 
-app.get('/api/imports',auth,async(req,res,next)=>{try{res.json(await ImportRun.find().sort({createdAt:-1}).limit(20).populate('importedBy','name'));}catch(e){next(e)}});app.get('/api/audit',auth,permit('admin'),async(req,res,next)=>{try{res.json(await Audit.find().sort({createdAt:-1}).limit(100).populate('actor','name email'));}catch(e){next(e)}});
+app.get('/api/imports',auth,async(req,res,next)=>{try{res.json(await ImportRun.find().sort({createdAt:-1}).limit(20).populate('importedBy','name'));}catch(e){next(e)}});
+app.get('/api/audit',auth,permit('admin'),async(req,res,next)=>{try{res.json(await Audit.find().sort({createdAt:-1}).limit(100).populate('actor','name email'));}catch(e){next(e)}});
+
+app.get('/api/logs',auth,permit('admin','manager'),async(req,res,next)=>{try{
+  const page=Math.max(1,+req.query.page||1);
+  const limit=Math.min(500,Math.max(1,+req.query.limit||50));
+  const search=String(req.query.search||'').trim();
+  const category=req.query.category||'all';
+  const statusFilter=req.query.status||'all';
+  const agentId=req.query.agentId||'';
+  const terminalId=req.query.terminalId?req.query.terminalId.toUpperCase():'';
+  const fromDate=req.query.from?new Date(req.query.from+'T00:00:00'):null;
+  const toDate=req.query.to?new Date(req.query.to+'T23:59:59.999'):null;
+
+  const auditQuery={};
+  if(fromDate||toDate){
+    auditQuery.createdAt={};
+    if(fromDate)auditQuery.createdAt.$gte=fromDate;
+    if(toDate)auditQuery.createdAt.$lte=toDate;
+  }
+
+  const auditRecords=await Audit.find(auditQuery).sort({createdAt:-1}).limit(1000).populate('actor','name email role profilePicture').lean();
+
+  const auditLogs=auditRecords.map(a=>{
+    const meta=a.metadata||{};
+    let cat='general';
+    if(['DAILY_AGENT_DISPATCHED','AREA_ROUTE_DISPATCHED','TERMINAL_ASSIGNED'].includes(a.action))cat='dispatch';
+    else if(['AGENT_JOB_UPDATED','AGENT_JOB_APPROVED'].includes(a.action))cat='tasks';
+    else if(['TERMINAL_STATUS_CHANGED'].includes(a.action))cat='terminals';
+    else if(['AGENT_CREATED','AGENT_UPDATED','AGENT_DEACTIVATED','AGENT_REACTIVATED','AGENT_PASSWORD_RESET'].includes(a.action))cat='agents';
+    else if(['CASH_WITHDRAWN','CASH_RETURNED','DISCREPANCY_RESOLVED'].includes(a.action))cat='ledger';
+    else if(['OFFICIAL_IMPORT'].includes(a.action))cat='imports';
+
+    return {
+      _id:String(a._id),
+      source:'audit',
+      timestamp:a.createdAt,
+      action:a.action,
+      category:cat,
+      actor:a.actor?{id:a.actor._id,name:a.actor.name,email:a.actor.email,role:a.actor.role}:null,
+      agent:(meta.agentId||meta.agentEmail)?{id:meta.agentId,name:meta.agentName||meta.agent,email:meta.agentEmail}:null,
+      terminalId:meta.terminalId||(a.entity==='Terminal'?a.entityId:''),
+      businessName:meta.businessName||meta.to||'',
+      address:meta.address||'',
+      city:meta.city||'',
+      status:meta.status||(a.action==='AGENT_JOB_APPROVED'?'approved':''),
+      isCompleted:a.action==='AGENT_JOB_APPROVED'||meta.status==='approved',
+      cashToLoad:meta.cashToLoad||0,
+      cashLoaded:meta.cashLoaded||0,
+      wishAmount:meta.wishAmount||0,
+      amount:meta.amount||0,
+      dueAt:meta.dueAt||null,
+      note:meta.note||meta.resolveNote||'',
+      proofFiles:meta.proofFiles||[],
+      metadata:meta,
+      ip:a.ip||''
+    };
+  });
+
+  const jobQuery={};
+  if(fromDate||toDate){
+    jobQuery.createdAt={};
+    if(fromDate)jobQuery.createdAt.$gte=fromDate;
+    if(toDate)jobQuery.createdAt.$lte=toDate;
+  }
+  if(agentId)jobQuery.agent=agentId;
+  if(terminalId)jobQuery.terminalId=terminalId;
+
+  const jobs=await AgentJob.find(jobQuery).sort({createdAt:-1}).limit(1000).populate('agent','name email profilePicture').populate('assignedBy','name email role').populate('events.createdBy','name email role').lean();
+
+  const jobLogs=[];
+  for(const job of jobs){
+    const agentObj=job.agent?{id:job.agent._id,name:job.agent.name,email:job.agent.email,profilePicture:job.agent.profilePicture?.url}:null;
+    const assignedByObj=job.assignedBy?{id:job.assignedBy._id,name:job.assignedBy.name,email:job.assignedBy.email,role:job.assignedBy.role}:null;
+
+    jobLogs.push({
+      _id:`job_dispatch_${job._id}`,
+      jobId:String(job._id),
+      source:'job_event',
+      timestamp:job.createdAt,
+      action:job.batchId?'AREA_ROUTE_DISPATCHED':'DAILY_AGENT_DISPATCHED',
+      category:'dispatch',
+      actor:assignedByObj,
+      agent:agentObj,
+      terminalId:job.terminalId,
+      businessName:job.businessName,
+      address:job.address,
+      city:job.city,
+      locationArea:job.locationArea,
+      status:'assigned',
+      isCompleted:job.status==='approved',
+      cashToLoad:job.cashToLoad,
+      cashLoaded:0,
+      wishAmount:job.wishAmount,
+      dueAt:job.dueAt,
+      note:job.events?.[0]?.note||'',
+      proofFiles:[]
+    });
+
+    for(let i=1;i<(job.events||[]).length;i++){
+      const ev=job.events[i];
+      const eventActor=ev.createdBy?{id:ev.createdBy._id,name:ev.createdBy.name,email:ev.createdBy.email,role:ev.createdBy.role}:(ev.status==='approved'?assignedByObj:agentObj);
+      const actionType=ev.status==='approved'?'AGENT_JOB_APPROVED':'AGENT_JOB_UPDATED';
+
+      jobLogs.push({
+        _id:`job_event_${job._id}_${i}_${ev.status}`,
+        jobId:String(job._id),
+        source:'job_event',
+        timestamp:ev.createdAt||job.updatedAt,
+        action:actionType,
+        category:'tasks',
+        actor:eventActor,
+        agent:agentObj,
+        terminalId:job.terminalId,
+        businessName:job.businessName,
+        address:job.address,
+        city:job.city,
+        status:ev.status,
+        isCompleted:ev.status==='approved',
+        cashToLoad:job.cashToLoad,
+        cashLoaded:ev.cashLoaded||(ev.status==='approved'?(job.events.find(x=>x.status==='cash_loaded')?.cashLoaded||job.cashToLoad):0),
+        wishAmount:job.wishAmount,
+        dueAt:job.dueAt,
+        note:ev.note||'',
+        proofFiles:(ev.proofFiles||[]).map(p=>({url:p.url,originalName:p.originalName,mimeType:p.mimeType}))
+      });
+    }
+  }
+
+  const combined=[...auditLogs,...jobLogs];
+  combined.sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
+
+  const deduped=[];
+  const seen=new Set();
+  for(const log of combined){
+    const key=`${log.action}_${log.terminalId}_${log.status}_${new Date(log.timestamp).toISOString().slice(0,16)}`;
+    if(seen.has(key))continue;
+    seen.add(key);
+    deduped.push(log);
+  }
+
+  let filtered=deduped;
+
+  if(category&&category!=='all'){
+    filtered=filtered.filter(l=>l.category===category);
+  }
+
+  if(statusFilter&&statusFilter!=='all'){
+    if(statusFilter==='completed'){
+      filtered=filtered.filter(l=>l.isCompleted||l.status==='approved'||l.action==='AGENT_JOB_APPROVED');
+    }else if(statusFilter==='in_progress'){
+      filtered=filtered.filter(l=>['assigned','accepted','travelling'].includes(l.status));
+    }else{
+      filtered=filtered.filter(l=>l.status===statusFilter);
+    }
+  }
+
+  if(agentId){
+    filtered=filtered.filter(l=>l.agent&&(String(l.agent.id)===String(agentId)||String(l.agent._id)===String(agentId)));
+  }
+
+  if(terminalId){
+    filtered=filtered.filter(l=>l.terminalId?.toUpperCase()===terminalId);
+  }
+
+  if(search){
+    const rx=search.toLowerCase();
+    filtered=filtered.filter(l=>
+      l.terminalId?.toLowerCase().includes(rx)||
+      l.businessName?.toLowerCase().includes(rx)||
+      l.city?.toLowerCase().includes(rx)||
+      l.agent?.name?.toLowerCase().includes(rx)||
+      l.agent?.email?.toLowerCase().includes(rx)||
+      l.actor?.name?.toLowerCase().includes(rx)||
+      l.action?.toLowerCase().includes(rx)||
+      l.status?.toLowerCase().includes(rx)||
+      l.note?.toLowerCase().includes(rx)
+    );
+  }
+
+  const totalLogs=filtered.length;
+  const completedTasksCount=filtered.filter(l=>l.status==='approved'||l.action==='AGENT_JOB_APPROVED').length;
+  const pendingTasksCount=filtered.filter(l=>['assigned','accepted','travelling','cash_loaded'].includes(l.status)).length;
+  const issueTasksCount=filtered.filter(l=>l.status==='issue_reported').length;
+  const totalCashDispatched=filtered.filter(l=>['DAILY_AGENT_DISPATCHED','AREA_ROUTE_DISPATCHED'].includes(l.action)).reduce((s,l)=>s+(l.cashToLoad||0),0);
+  const totalCashLoaded=filtered.filter(l=>l.status==='approved'||l.action==='AGENT_JOB_APPROVED').reduce((s,l)=>s+(l.cashLoaded||0),0);
+
+  const totalPages=Math.ceil(filtered.length/limit)||1;
+  const paginatedItems=filtered.slice((page-1)*limit,page*limit);
+
+  res.json({
+    items:paginatedItems,
+    total:totalLogs,
+    page,
+    pages:totalPages,
+    stats:{
+      totalLogs,
+      completedTasksCount,
+      pendingTasksCount,
+      issueTasksCount,
+      totalCashDispatched,
+      totalCashLoaded
+    }
+  });
+}catch(e){next(e)}});
 app.get('/api/assignment-history',auth,permit('admin'),async(req,res,next)=>{try{const escape=s=>String(s||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const match={};if(req.query.search){const rx=new RegExp(escape(req.query.search),'i');match.$or=[{terminalId:rx},{'assignmentHistory.businessName':rx},{'assignmentHistory.address':rx},{'assignmentHistory.city':rx}];}if(req.query.city)match['assignmentHistory.city']=new RegExp(`^${escape(req.query.city)}$`,'i');if(req.query.from||req.query.to){match['assignmentHistory.assignedAt']={};if(req.query.from)match['assignmentHistory.assignedAt'].$gte=new Date(`${req.query.from}T00:00:00`);if(req.query.to)match['assignmentHistory.assignedAt'].$lte=new Date(`${req.query.to}T23:59:59.999`);}const limit=Math.min(5000,Math.max(1,+req.query.limit||500));const pipeline=[{$unwind:'$assignmentHistory'},{$match:match},{$lookup:{from:'users',localField:'assignmentHistory.assignedBy',foreignField:'_id',as:'assignedUser'}},{$unwind:{path:'$assignedUser',preserveNullAndEmptyArrays:true}},{$project:{_id:0,terminalId:1,originalBusiness:'$original.businessName',originalAddress:'$original.address',businessName:'$assignmentHistory.businessName',address:'$assignmentHistory.address',city:'$assignmentHistory.city',paymentAmount:'$assignmentHistory.paymentAmount',assignedAt:'$assignmentHistory.assignedAt',endedAt:'$assignmentHistory.endedAt',note:'$assignmentHistory.note',assignedBy:'$assignedUser.name',assignedByEmail:'$assignedUser.email'}},{$sort:{assignedAt:-1}},{$limit:limit}];const items=await Terminal.aggregate(pipeline);res.json({items,total:items.length,limited:items.length===limit});}catch(e){next(e)}});
 app.use((err,req,res,next)=>{console.error(err);if(err.name==='ZodError')return res.status(400).json({message:'Validation failed',issues:err.issues});res.status(500).json({message:'An unexpected error occurred',...(process.env.NODE_ENV!=='production'?{detail:err.message}:{})});});
 async function start(){await mongoose.connect(process.env.MONGODB_URI);const email=process.env.ADMIN_EMAIL?.toLowerCase();if(email&&!await User.exists({email}))await User.create({name:'Administrator',email,passwordHash:await bcrypt.hash(process.env.ADMIN_PASSWORD,12),role:'admin'});app.listen(process.env.PORT||4000,()=>console.log(`API ready on ${process.env.PORT||4000}`));} if(require.main===module)start().catch(e=>{console.error(e);process.exit(1)});

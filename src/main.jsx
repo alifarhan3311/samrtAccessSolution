@@ -11,6 +11,7 @@ import OfficialImport from './OfficialImport.jsx';
 import Notifications from './Notifications.jsx';
 import CashLedger from './CashLedger.jsx';
 import Discrepancies from './Discrepancies.jsx';
+import SystemLogs from './SystemLogs.jsx';
 import'./style.css';
 import'./terminal.css';
 import'./history.css';
@@ -21,6 +22,7 @@ import'./agent-management.css';
 import'./overrides.css';
 import'./area-dispatch.css';
 import'./ledger.css';
+import'./system-logs.css';
 
 const nativeFetch=window.fetch.bind(window);
 window.fetch=async(...args)=>{
@@ -61,9 +63,9 @@ function Shell(){
     :[['dashboard','Overview','⌂'],['notifications','Notifications','●'],['terminals','Terminals','▦'],
       ['assign','ATM setup & location','⌖'],['dispatch','Single ATM dispatch','↗'],
       ['area','Area route dispatch','⌘'],['jobs','Agent jobs & history','▣'],
-      ...(admin?[['agents','Manage agents','☺'],['ledger','Cash ledger','$'],['discrepancies','Cash discrepancies','⚠'],['history','ATM movement history','◷']]:[]),
+      ...(admin?[['agents','Manage agents','☺'],['ledger','Cash ledger','$'],['discrepancies','Cash discrepancies','⚠'],['history','ATM movement history','◷'],['logs','Activity & Audit Logs','📋']]:[]),
       ['import','Official import','⇅']];
-  const titles={dashboard:'Command center',notifications:'Notifications & setup queue',terminals:'Terminal registry',assign:'ATM setup & current location',dispatch:'Single ATM dispatch',area:'Location area route dispatch',jobs:agent?'My jobs & completed history':'Agent jobs & assignment history',agents:'Agent management',ledger:'Cash ledger & flow',history:'ATM movement history',discrepancies:'Cash discrepancies & alerts',import:'Official data import'};
+  const titles={dashboard:'Command center',notifications:'Notifications & setup queue',terminals:'Terminal registry',assign:'ATM setup & current location',dispatch:'Single ATM dispatch',area:'Location area route dispatch',jobs:agent?'My jobs & completed history':'Agent jobs & assignment history',agents:'Agent management',ledger:'Cash ledger & flow',history:'ATM movement history',discrepancies:'Cash discrepancies & alerts',logs:'System Activity & Audit Logs',import:'Official data import'};
   return <div className="shell">
     <aside>
       <div className="logo"><div className="mark">S</div><div><b>Smart Access</b><small>COMMAND CENTER</small></div></div>
@@ -86,6 +88,7 @@ function Shell(){
       :page==='ledger'?<CashLedger/>
       :page==='discrepancies'?<Discrepancies/>
       :page==='history'?<AssignmentHistory/>
+      :page==='logs'?<SystemLogs/>
       :<OfficialImport/>}
     </section>
   </div>;

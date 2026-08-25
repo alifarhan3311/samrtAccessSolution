@@ -20,6 +20,7 @@ export default function DailyDispatch({done}){
     try{
       const[atm,active]=await Promise.all([req('/terminals/'+terminalId),req('/jobs/active-terminal/'+terminalId)]);
       if(active.busy){setTerminal();return setMsg(`${terminalId} is already assigned to ${active.job?.agent?.name||'an agent'} (${active.job?.status}). Complete and approve that job first.`);}
+      if(atm.official?.status==='Inactive'){setTerminal();return setMsg(`Cannot assign ${terminalId}: ATM is currently Inactive. Please activate the terminal in Terminal Registry first.`);}
       setTerminal(atm);
       const suggested=Math.max(0,(atm.official?.wishAmount||0)-(atm.official?.cashBalance||0));
       setF(p=>({...p,cashToLoad:suggested}));
