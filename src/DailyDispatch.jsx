@@ -70,6 +70,7 @@ export default function DailyDispatch({done}){
         <div><small>AVAILABLE TERMINAL</small><b>{terminal.terminalId}</b></div>
         <div><small>CURRENT LOCATION</small><b>{terminal.current?.businessName}</b><span>{terminal.current?.address}</span></div>
         <div><small>WISH / BALANCE</small><b>{money(terminal.official?.wishAmount)} / {money(terminal.official?.cashBalance)}</b></div>
+        <div><small>BILLS ($20s)</small><b style={{color:'#183d36'}}>{Math.floor((terminal.official?.wishAmount||0)/20)} / {Math.floor((terminal.official?.cashBalance||0)/20)}</b></div>
       </div>}
 
       <form className={!terminal?'locked':''} onSubmit={dispatch}>

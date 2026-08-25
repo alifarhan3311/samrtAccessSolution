@@ -117,6 +117,10 @@ export default function AreaDispatch({done}){
               <small>WISH / BALANCE</small>
               <b>${(t.official?.wishAmount||0).toLocaleString()} / ${(t.official?.cashBalance||0).toLocaleString()}</b>
             </section>
+            <section>
+              <small>BILLS ($20s)</small>
+              <b style={{color:'#183d36'}}>{Math.floor((t.official?.wishAmount||0)/20)} / {Math.floor((t.official?.cashBalance||0)/20)}</b>
+            </section>
             {isInactive
               ? <strong style={{color:'#a63e36'}}>Inactive — Activate first</strong>
               : t.activeJob
