@@ -1,4 +1,5 @@
 import React,{useEffect,useState}from'react';
+import LoadingSpinner from './LoadingSpinner.jsx';
 const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 const money=v=>'$'+Number(v||0).toLocaleString();
 
@@ -16,7 +17,11 @@ export default function DailyDispatch({done}){
     return req(`/cash/available?localDate=${localDate}`).then(setBal).catch(()=>{});
   };
 
-  useEffect(()=>{loadAgents();loadBal();},[]);
+  const[initialLoading,setInitialLoading]=useState(true);
+
+  useEffect(()=>{
+    Promise.all([loadAgents(),loadBal()]).finally(()=>setInitialLoading(false));
+  },[]);
 
   async function find(e){
     e.preventDefault();
@@ -44,6 +49,8 @@ export default function DailyDispatch({done}){
   const cashToLoad=+f.cashToLoad||0;
   const available=bal?.available??null;
   const overBudget=available!==null&&cashToLoad>available;
+
+  if(initialLoading) return <LoadingSpinner text="Loading dispatch data..."/>;
 
   return <div className="daily-dispatch">
     <section className="dispatch-form">

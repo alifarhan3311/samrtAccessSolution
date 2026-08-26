@@ -1,4 +1,5 @@
 import React,{useEffect,useState}from'react';
+import LoadingSpinner from './LoadingSpinner.jsx';
 const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 const money2=v=>'$'+Number(v||0).toLocaleString();
 
@@ -14,11 +15,13 @@ export default function AreaDispatch({done}){
   const[msg,setMsg]=useState('');
   const[bal,setBal]=useState(null);
   const[loadingTerminals,setLoadingTerminals]=useState(false);
+  const[initialLoading,setInitialLoading]=useState(true);
 
   useEffect(()=>{
     const ld=new Date();const localDate=`${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
     Promise.all([req('/location-areas'),req('/users/agents'),req(`/cash/available?localDate=${localDate}`).catch(()=>null)])
-      .then(([a,g,b])=>{setAreas(a);setAgents(g);if(b)setBal(b);});
+      .then(([a,g,b])=>{setAreas(a);setAgents(g);if(b)setBal(b);})
+      .finally(()=>setInitialLoading(false));
   },[]);
 
   async function loadTerminalsForAreas(areaList){
@@ -96,6 +99,8 @@ export default function AreaDispatch({done}){
   const available=bal?.available??null;
   const overBudget=available!==null&&total>available;
   const allAssigned=selected.length>0 && selected.every(id => Boolean(agentOverrides[id] || form.agentId));
+
+  if(initialLoading) return <LoadingSpinner text="Loading route planning data..."/>;
 
   return <main className="area-page">
     <section className="area-control">
