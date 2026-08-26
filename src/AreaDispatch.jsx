@@ -9,6 +9,7 @@ export default function AreaDispatch({done}){
   const[terminals,setTerminals]=useState([]);
   const[selected,setSelected]=useState([]);
   const[cashOverrides,setCashOverrides]=useState({});
+  const[agentOverrides,setAgentOverrides]=useState({});
   const[form,setForm]=useState({agentId:'',dueAt:'',note:''});
   const[msg,setMsg]=useState('');
   const[bal,setBal]=useState(null);
@@ -20,17 +21,23 @@ export default function AreaDispatch({done}){
   },[]);
 
   async function loadTerminalsForAreas(areaList){
-    setSelectedAreas(areaList);setSelected([]);setTerminals([]);setCashOverrides({});setMsg('');
+    setSelectedAreas(areaList);setSelected([]);setTerminals([]);setCashOverrides({});setAgentOverrides({});setMsg('');
     if(!areaList.length)return;
     setLoadingTerminals(true);
     try{
       const param=encodeURIComponent(areaList.join(','));
       const items=await req('/location-areas/'+param+'/terminals');
       setTerminals(items);
-      setSelected(items.filter(t=>!t.activeJob&&t.official?.status!=='Inactive').map(t=>t.terminalId));
-      const defaults={};
-      items.forEach(t=>{ defaults[t.terminalId]=t.requiredCash||0; });
-      setCashOverrides(defaults);
+      const activeIds=items.filter(t=>!t.activeJob&&t.official?.status!=='Inactive').map(t=>t.terminalId);
+      setSelected(activeIds);
+      const defaultCash={};
+      const defaultAgents={};
+      items.forEach(t=>{
+        defaultCash[t.terminalId]=t.requiredCash||0;
+        if(form.agentId) defaultAgents[t.terminalId]=form.agentId;
+      });
+      setCashOverrides(defaultCash);
+      setAgentOverrides(defaultAgents);
     }catch(e){
       setMsg(e.message);
     }finally{
@@ -43,6 +50,21 @@ export default function AreaDispatch({done}){
       ? selectedAreas.filter(a=>a!==areaName)
       : [...selectedAreas, areaName];
     loadTerminalsForAreas(nextAreas);
+  }
+
+  function handleGlobalAgentChange(globalAgentId){
+    setForm(prev=>({...prev, agentId: globalAgentId}));
+    if(globalAgentId){
+      setAgentOverrides(prev=>{
+        const next={...prev};
+        terminals.forEach(t=>{ next[t.terminalId] = globalAgentId; });
+        return next;
+      });
+    }
+  }
+
+  function handleRowAgentChange(terminalId, targetAgentId){
+    setAgentOverrides(prev=>({...prev, [terminalId]: targetAgentId}));
   }
 
   function toggle(id){setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);}
@@ -62,6 +84,7 @@ export default function AreaDispatch({done}){
         locationArea:selectedAreas.join(', '),
         terminalIds:selected,
         cashOverrides,
+        agentOverrides,
       })});
       setMsg(`${result.assigned} ATMs assigned across ${selectedAreas.length} area(s). Total cash: $${result.totalCash.toLocaleString()}. ${result.skippedLocked} locked ATM(s) skipped.`);
       setTimeout(()=>done?.(),1200);
@@ -71,6 +94,7 @@ export default function AreaDispatch({done}){
   const total=selected.reduce((s,id)=>s+(cashOverrides[id]||0),0);
   const available=bal?.available??null;
   const overBudget=available!==null&&total>available;
+  const allAssigned=selected.length>0 && selected.every(id => Boolean(agentOverrides[id] || form.agentId));
 
   return <main className="area-page">
     <section className="area-control">
@@ -126,9 +150,9 @@ export default function AreaDispatch({done}){
       </div>
 
       <div className="area-fields" style={{gridTemplateColumns:'1fr 1fr'}}>
-        <label>Assign Agent
-          <select value={form.agentId} onChange={e=>setForm({...form,agentId:e.target.value})} required>
-            <option value="">Select agent...</option>
+        <label>Default Agent (Sets for all ATMs)
+          <select value={form.agentId} onChange={e=>handleGlobalAgentChange(e.target.value)}>
+            <option value="">Select default agent...</option>
             {agents.map(a=><option key={a._id} value={a._id}>{a.name} — {a.openJobs} open jobs</option>)}
           </select>
         </label>
@@ -163,6 +187,7 @@ export default function AreaDispatch({done}){
           const isSelected=selected.includes(t.terminalId);
           const currentCad=cashOverrides[t.terminalId]??t.requiredCash??0;
           const currentBills=Math.floor(currentCad/20);
+          const assignedAgent=agentOverrides[t.terminalId]||form.agentId||'';
 
           return <label key={t.terminalId} className={isDisabled?'locked-atm':''}>
             <input type="checkbox" disabled={isDisabled} checked={isSelected} onChange={()=>toggle(t.terminalId)}/>
@@ -178,11 +203,32 @@ export default function AreaDispatch({done}){
               <small>BILLS ($20s)</small>
               <b style={{color:'#183d36'}}>{Math.floor((t.official?.wishAmount||0)/20)} / {Math.floor((t.official?.cashBalance||0)/20)}</b>
             </section>
-            {isInactive
-              ? <strong style={{color:'#a63e36'}}>Inactive — Activate first</strong>
-              : t.activeJob
-              ? <strong style={{color:'#999'}}>Assigned: {t.activeJob.agent?.name}</strong>
-              : <div className="cash-override">
+
+            {isInactive ? (
+              <strong style={{color:'#a63e36', gridColumn: 'span 2', textAlign: 'right'}}>Inactive — Activate first</strong>
+            ) : t.activeJob ? (
+              <strong style={{color:'#999', gridColumn: 'span 2', textAlign: 'right'}}>Assigned: {t.activeJob.agent?.name}</strong>
+            ) : (
+              <>
+                <div className="agent-select-wrap">
+                  <small className="agent-select-label">ASSIGNED AGENT</small>
+                  <div className={`agent-pill-box ${assignedAgent ? 'has-agent' : ''} ${!isSelected ? 'disabled' : ''}`}>
+                    <span className="agent-avatar-icon">👤</span>
+                    <select
+                      value={assignedAgent}
+                      onChange={e=>handleRowAgentChange(t.terminalId, e.target.value)}
+                      disabled={!isSelected}
+                      onClick={e=>e.stopPropagation()}
+                      required={isSelected}
+                    >
+                      <option value="">Choose Agent...</option>
+                      {agents.map(a=><option key={a._id} value={a._id}>{a.name}</option>)}
+                    </select>
+                    <span className="agent-chevron">▾</span>
+                  </div>
+                </div>
+
+                <div className="cash-override">
                   <small>BILLS TO LOAD (20s)</small>
                   <div className="bills-input-wrap">
                     <input
@@ -198,7 +244,8 @@ export default function AreaDispatch({done}){
                     <span className="cad-equiv">= {money2(currentCad)}</span>
                   </div>
                 </div>
-            }
+              </>
+            )}
           </label>;
         })}
       </div>
@@ -207,9 +254,11 @@ export default function AreaDispatch({done}){
         <textarea value={form.note} onChange={e=>setForm({...form,note:e.target.value})}/>
       </label>
       {msg&&<p className={msg.includes('assigned')?'success':'error'}>{msg}</p>}
-      <button className="dispatch-area" disabled={!selected.length||!form.agentId||!form.dueAt||overBudget}>
+      <button className="dispatch-area" disabled={!selected.length||!allAssigned||!form.dueAt||overBudget}>
         {overBudget
           ?`Insufficient balance — need ${money2(total-available)} more`
+          :!allAssigned
+          ?'Please select an Agent for all checked ATMs'
           :'Dispatch area route →'}
       </button>
     </form>}
