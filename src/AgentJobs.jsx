@@ -83,7 +83,16 @@ export default function AgentJobs({ role }) {
   const [jobs,    setJobs]    = useState([]);
   const [status,  setStatus]  = useState('');
   const [search,  setSearch]  = useState('');
+  const [agentId, setAgentId] = useState('');
+  const [fromDate,setFromDate]= useState('');
+  const [toDate,  setToDate]  = useState('');
+  const [page,    setPage]    = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [agentsList, setAgentsList] = useState([]);
+
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(''); // track button loaders by ID
   const [selected,setSelected]= useState(null); // job detail modal
   const [updating,setUpdating]= useState(null); // job update modal
   const [msg,     setMsg]     = useState('');
@@ -91,45 +100,81 @@ export default function AgentJobs({ role }) {
 
   const admin = role === 'admin' || role === 'manager';
 
+  useEffect(() => {
+    if (admin) {
+      json('/users/agents').then(setAgentsList).catch(() => {});
+    }
+  }, [admin]);
+
   const load = () => {
     setLoading(true);
-    json(`/jobs?status=${status}&search=${encodeURIComponent(search)}`)
-      .then(d => { setJobs(d); setLoading(false); })
-      .catch(e => { setMsg(e.message); setLoading(false); });
+    const qs = new URLSearchParams();
+    if(status) qs.set('status', status);
+    if(search) qs.set('search', search);
+    if(admin && agentId) qs.set('agentId', agentId);
+    if(fromDate) qs.set('fromDate', fromDate);
+    if(toDate) qs.set('toDate', toDate);
+    qs.set('page', page);
+    qs.set('limit', 25);
+
+    json(`/jobs?${qs.toString()}`)
+      .then(d => { 
+        if (d.items) {
+          setJobs(d.items); 
+          setTotalPages(d.pages);
+          setTotalItems(d.total);
+        } else {
+          setJobs(d); // fallback if backend didn't update properly
+        }
+      })
+      .catch(e => { setMsg(e.message); })
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
-  }, [status, search]);
+  }, [status, search, agentId, fromDate, toDate, page]);
 
   async function createAgent(e) {
     e.preventDefault();
+    setActionLoading('createAgent');
     try {
       await json('/users/agents', { method: 'POST', body: JSON.stringify(agent) });
       setMsg('Agent account created.');
       setAgent({ name: '', email: '', password: '' });
     } catch (e) { setMsg(e.message); }
+    setActionLoading('');
   }
 
   async function approve(job, e) {
     e.stopPropagation();
+    setActionLoading(`approve_${job._id}`);
     try {
       await json(`/jobs/${job._id}/approve`, { method: 'POST', body: '{}' });
       setMsg('Cash loading verified and approved.');
       setSelected(null);
       load();
     } catch (e) { setMsg(e.message); }
+    setActionLoading('');
   }
 
   async function openProof(job, file, e) {
     e && e.stopPropagation();
-    const r = await fetch(`/api/jobs/${job._id}/proofs/${file.storedName}`, { headers: auth() });
-    if (!r.ok) return setMsg('Could not open proof');
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank', 'noopener,noreferrer');
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    if (file.url) {
+      window.open(file.url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setActionLoading(`proof_${file.storedName}`);
+    try {
+      const r = await fetch(`/api/jobs/${job._id}/proofs/${file.storedName}`, { headers: auth() });
+      if (!r.ok) { setActionLoading(''); return setMsg('Could not open proof'); }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { setMsg(e.message); }
+    setActionLoading('');
   }
 
   // refresh selected job after update
@@ -138,15 +183,18 @@ export default function AgentJobs({ role }) {
     await load();
     // re-fetch the single job to refresh modal
     if (selected) {
-      const fresh = await json(`/jobs?status=&search=${encodeURIComponent(selected.terminalId)}`);
-      const updated = fresh.find(j => j._id === selected._id);
+      const qs = new URLSearchParams({ search: selected.terminalId });
+      const fresh = await json(`/jobs?${qs.toString()}`);
+      const items = fresh.items || fresh;
+      const updated = items.find(j => j._id === selected._id);
       if (updated) setSelected(updated);
     }
   }
 
+  const money = v => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(v || 0);
+
   return (
     <>
-      {/* ── Header ─────────────────────────────────────────────── */}
       <div className="aj-head">
         <div>
           <p className="eyebrow">CASH SERVICE CONTROL</p>
@@ -154,7 +202,7 @@ export default function AgentJobs({ role }) {
         </div>
         <div className="aj-head-actions">
           {admin && jobs.length > 0 && (
-            <button className="aj-btn-dl" onClick={() => downloadCSV(jobs)}>
+            <button className="aj-btn-dl" onClick={() => downloadCSV(jobs)} disabled={!!actionLoading}>
               ⬇ Download CSV
             </button>
           )}
@@ -163,32 +211,47 @@ export default function AgentJobs({ role }) {
               <summary>+ Create agent</summary>
               <form onSubmit={createAgent}>
                 <input placeholder="Agent name" required value={agent.name}
-                  onChange={e => setAgent({ ...agent, name: e.target.value })} />
+                  onChange={e => setAgent({ ...agent, name: e.target.value })} disabled={!!actionLoading} />
                 <input type="email" placeholder="Email" required value={agent.email}
-                  onChange={e => setAgent({ ...agent, email: e.target.value })} />
+                  onChange={e => setAgent({ ...agent, email: e.target.value })} disabled={!!actionLoading} />
                 <input type="password" placeholder="Temporary password" minLength="8" required
                   value={agent.password}
-                  onChange={e => setAgent({ ...agent, password: e.target.value })} />
-                <button type="submit">Create</button>
+                  onChange={e => setAgent({ ...agent, password: e.target.value })} disabled={!!actionLoading} />
+                <button type="submit" disabled={!!actionLoading}>
+                  {actionLoading === 'createAgent' ? 'Creating...' : 'Create'}
+                </button>
               </form>
             </details>
           )}
         </div>
       </div>
 
-      {/* ── Filters ────────────────────────────────────────────── */}
-      <div className="aj-filters">
-        <input
-          placeholder="Search terminal, business or city…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-        <select value={status} onChange={e => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          {Object.entries(STATUS_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
+      <div className="aj-filters ops-filters" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+        <label>Search
+          <input placeholder="Terminal, business or city…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+        </label>
+        <label>Date From
+          <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1); }} />
+        </label>
+        <label>Date To
+          <input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setPage(1); }} />
+        </label>
+        {admin && (
+          <label>Agent
+            <select value={agentId} onChange={e => { setAgentId(e.target.value); setPage(1); }}>
+              <option value="">All agents</option>
+              {agentsList.map(a => <option key={a._id} value={a._id}>{a.name}</option>)}
+            </select>
+          </label>
+        )}
+        <label>Status
+          <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>
+            <option value="">All statuses</option>
+            {Object.entries(STATUS_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {msg && (
@@ -197,84 +260,85 @@ export default function AgentJobs({ role }) {
         </p>
       )}
 
-      {/* ── Card Grid ──────────────────────────────────────────── */}
       {loading ? (
         <LoadingSpinner text="Fetching assigned agent jobs & route history..." />
       ) : jobs.length === 0 ? (
         <p className="aj-empty">No jobs found.</p>
       ) : (
-          <div className="aj-grid">
-            {jobs.map(job => {
-              const loadedEv = [...(job.events || [])].reverse().find(e => e.status === 'cash_loaded');
-              const color    = STATUS_COLOR[job.status] || '#78958e';
-              return (
-                <div
-                  key={job._id}
-                  className="aj-card"
-                  style={{ '--status-color': color }}
-                  onClick={() => setSelected(job)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => e.key === 'Enter' && setSelected(job)}
-                >
-                  {/* status pill */}
-                  <span className="aj-card-status" style={{ background: color + '22', color }}>
-                    {STATUS_LABEL[job.status]}
-                  </span>
-
-                  {/* terminal + name */}
-                  <h4 className="aj-card-terminal">{job.terminalId}</h4>
-                  <p  className="aj-card-biz">{job.businessName}</p>
-                  <p  className="aj-card-loc">{job.city}</p>
-
-                  {/* key metrics */}
-                  <div className="aj-card-metrics">
-                    <div>
-                      <small>CASH TO LOAD</small>
-                      <strong>${job.cashToLoad?.toLocaleString()}</strong>
-                    </div>
-                    {loadedEv && (
-                      <div>
-                        <small>LOADED</small>
-                        <strong>${loadedEv.cashLoaded?.toLocaleString()}</strong>
-                      </div>
-                    )}
-                    <div>
-                      <small>AGENT</small>
-                      <strong title={job.agent?.name || 'You'}>
-                        {job.agent?.name
-                          ? (() => {
-                              const parts = job.agent.name.trim().split(/\s+/);
-                              if (parts.length <= 2) return job.agent.name;
-                              // first name + last name only
-                              return `${parts[0]} ${parts[parts.length - 1]}`;
-                            })()
-                          : 'You'}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {/* due date */}
-                  <div className="aj-card-due">
-                    <small>DUE</small>
-                    <span>{new Date(job.dueAt).toLocaleDateString('en-CA')}</span>
-                  </div>
-
-                  {/* quick approve badge for admin */}
-                  {admin && job.status === 'cash_loaded' && (
-                    <button
-                      className="aj-card-approve"
-                      onClick={e => approve(job, e)}
-                    >
-                      ✓ Approve
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+        <>
+          <div className="table-wrap full-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Terminal ID</th>
+                  <th>Business Name</th>
+                  <th>City / Area</th>
+                  <th>Cash To Load</th>
+                  <th>Cash Loaded</th>
+                  <th>Agent</th>
+                  <th>Due Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map(job => {
+                  const loadedEv = [...(job.events || [])].reverse().find(e => e.status === 'cash_loaded');
+                  const color = STATUS_COLOR[job.status] || '#78958e';
+                  return (
+                    <tr key={job._id} className={job.status === 'issue_reported' ? 'warn-row' : ''}>
+                      <td>
+                        <span className="aj-card-status" style={{ background: color + '22', color }}>
+                          {STATUS_LABEL[job.status]}
+                        </span>
+                      </td>
+                      <td><b>{job.terminalId}</b></td>
+                      <td>{job.businessName}</td>
+                      <td>{job.city}{job.locationArea && ` / ${job.locationArea}`}</td>
+                      <td>{money(job.cashToLoad)}</td>
+                      <td>{loadedEv ? <b style={{ color: '#16a34a' }}>{money(loadedEv.cashLoaded)}</b> : '—'}</td>
+                      <td>{job.agent?.name || '—'}</td>
+                      <td>{new Date(job.dueAt).toLocaleDateString('en-CA')}</td>
+                      <td style={{ display: 'flex', gap: '8px' }}>
+                        <button className="link" onClick={() => setSelected(job)} disabled={!!actionLoading}>
+                          View details
+                        </button>
+                        {admin && job.status === 'cash_loaded' && (
+                          <button 
+                            className="aj-card-approve" 
+                            style={{ padding: '4px 10px', fontSize: '11px', margin: 0, width: 'auto' }}
+                            onClick={e => approve(job, e)}
+                            disabled={!!actionLoading}
+                          >
+                            {actionLoading === `approve_${job._id}` ? 'Approving...' : '✓ Approve'}
+                          </button>
+                        )}
+                        {!admin && !['approved', 'cash_loaded'].includes(job.status) && (
+                          <button 
+                            className="aj-btn-primary" 
+                            style={{ padding: '4px 10px', fontSize: '11px' }}
+                            onClick={() => setUpdating(job)}
+                            disabled={!!actionLoading}
+                          >
+                            Update
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )
-      }
+          {totalPages > 1 && (
+            <div className="pagination">
+              <button disabled={page <= 1 || !!actionLoading} onClick={() => setPage(p => p - 1)}>← Prev</button>
+              <span>Page {page} of {totalPages} ({totalItems} total)</span>
+              <button disabled={page >= totalPages || !!actionLoading} onClick={() => setPage(p => p + 1)}>Next →</button>
+            </div>
+          )}
+        </>
+      )}
 
       {/* ── Job Detail Modal ───────────────────────────────────── */}
       {selected && (
@@ -378,7 +442,15 @@ function JobDetailModal({ job, admin, onClose, onApprove, onProof, onUpdate }) {
             </button>
           )}
           {admin && job.status === 'cash_loaded' && (
-            <button className="aj-btn-approve" onClick={e => onApprove(job, e)}>
+            <button className="aj-btn-approve" onClick={e => {
+              const btn = e.currentTarget;
+              btn.disabled = true;
+              btn.textContent = 'Approving...';
+              onApprove(job, e).finally(() => {
+                btn.disabled = false;
+                btn.textContent = '✓ Verify & approve cash load';
+              });
+            }}>
               ✓ Verify & approve cash load
             </button>
           )}
@@ -398,17 +470,25 @@ function JobUpdate({ job, close, saved }) {
 
   async function send(e) {
     e.preventDefault();
-    const fd = new FormData();
-    fd.append('status', status);
-    fd.append('note', note);
-    if (status === 'cash_loaded') fd.append('cashLoaded', cash);
-    [...files].forEach(f => fd.append('proofs', f));
-    const r = await fetch(`/api/jobs/${job._id}/events`, {
-      method: 'POST', headers: auth(), body: fd
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) return setError(d.message || 'Update failed');
-    saved();
+    setError('');
+    const btn = e.target.querySelector('button[type="submit"]');
+    if(btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+    try {
+      const fd = new FormData();
+      fd.append('status', status);
+      fd.append('note', note);
+      if (status === 'cash_loaded') fd.append('cashLoaded', cash);
+      [...files].forEach(f => fd.append('proofs', f));
+      const r = await fetch(`/api/jobs/${job._id}/events`, {
+        method: 'POST', headers: auth(), body: fd
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || 'Update failed');
+      saved();
+    } catch (err) {
+      setError(err.message);
+      if(btn) { btn.disabled = false; btn.textContent = 'Submit update'; }
+    }
   }
 
   return (

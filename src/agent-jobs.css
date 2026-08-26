@@ -81,17 +81,36 @@
 /* ── Filters ────────────────────────────────────────────────── */
 .aj-filters {
   display: grid;
-  grid-template-columns: 1fr 220px;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 14px;
+  margin-bottom: 25px;
+}
+.aj-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #737d77;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
 }
 .aj-filters input,
 .aj-filters select {
-  border: 1px solid #d9dfda;
+  border: 1px solid #dce1dc;
   border-radius: 8px;
-  padding: 11px 13px;
+  padding: 10px 14px;
   background: #fff;
-  font-size: 13px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 600;
+  color: #245d4f;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.aj-filters input:focus,
+.aj-filters select:focus {
+  border-color: #78958e;
+  box-shadow: 0 0 0 3px rgba(120, 149, 142, 0.15);
 }
 
 /* ── Empty state ────────────────────────────────────────────── */
@@ -400,6 +419,68 @@
   cursor: pointer;
 }
 .aj-btn-approve:hover { background: #3a8f5e; }
+.aj-btn-approve:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Table & Pagination ─────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid #dce1dc;
+  background: #fff;
+  margin-top: 10px;
+}
+.full-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.full-table th {
+  background: #f4f7f4;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 700;
+  color: #555;
+  border-bottom: 1px solid #dce1dc;
+}
+.full-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #edf0ed;
+}
+.full-table tr:hover {
+  background: #fafcfa;
+}
+.warn-row {
+  background: #fffafa !important;
+}
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-top: 25px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+}
+.pagination button {
+  padding: 8px 16px;
+  border: 1px solid #dce1dc;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #183d36;
+}
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pagination button:not(:disabled):hover {
+  background: #f4f7f4;
+}
 
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 800px) {

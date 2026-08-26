@@ -215,7 +215,10 @@ export default function AreaDispatch({done}){
             {isInactive ? (
               <strong style={{color:'#a63e36', gridColumn: 'span 2', textAlign: 'right'}}>Inactive — Activate first</strong>
             ) : t.activeJob ? (
-              <strong style={{color:'#999', gridColumn: 'span 2', textAlign: 'right'}}>Assigned: {t.activeJob.agent?.name}</strong>
+              <div style={{gridColumn: 'span 2', textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
+                <strong style={{color:'#999'}}>Assigned: {t.activeJob.agent?.name}</strong>
+                {t.activeJob.dueAt && <small style={{color:'#a5b0aa', fontSize: '10px', marginTop: '2px'}}>Due: {new Date(t.activeJob.dueAt).toLocaleDateString('en-CA')}</small>}
+              </div>
             ) : (
               <>
                 <div className="agent-select-wrap">

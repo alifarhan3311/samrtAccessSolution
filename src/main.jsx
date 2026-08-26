@@ -65,14 +65,14 @@ function Shell(){
   const admin=user.role==='admin', agent=user.role==='agent';
 
   const links=agent
-    ?[['jobs','My jobs & history','▣','/jobs']]
+    ?[['jobs','Daily agent load','▣','/jobs']]
     :[['dashboard','Overview','⌂','/dashboard'],
       ['notifications','Notifications','●','/notifications'],
       ['terminals','Terminals','▦','/terminals'],
       ['assign','ATM setup & location','⌖','/assign'],
       ['dispatch','Single ATM dispatch','↗','/dispatch'],
       ['area','Area route dispatch','⌘','/area'],
-      ['jobs','Agent jobs & history','▣','/jobs'],
+      ['jobs','Daily agent load','▣','/jobs'],
       ...(admin?[
         ['agents','Manage agents','☺','/agents'],
         ['ledger','Cash ledger','$','/ledger'],
@@ -89,7 +89,7 @@ function Shell(){
     assign:'ATM setup & current location',
     dispatch:'Single ATM dispatch',
     area:'Location area route dispatch',
-    jobs:agent?'My jobs & completed history':'Agent jobs & assignment history',
+    jobs:'Daily agent load',
     agents:'Agent management',
     ledger:'Cash ledger & flow',
     history:'ATM movement history',
