@@ -1,4 +1,5 @@
 import React,{useEffect,useState,useCallback}from'react';
+import LoadingSpinner from './LoadingSpinner.jsx';
 
 const req=async(p,o={})=>{
   const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...(o.headers||{})}});
@@ -19,6 +20,7 @@ export default function CashLedger(){
   const[withdrawals,setWithdrawals]=useState({items:[],totalAmount:0});
   const[returns,setReturns]=useState({items:[],totalAmount:0});
   const[dateRange,setDateRange]=useState({from:monthStartStr(),to:todayStr()});
+  const[loading,setLoading]=useState(true);
 
   // per-form state
   const[wForm,setWForm]=useState({amount:'',note:'',date:todayStr()});
@@ -35,6 +37,7 @@ export default function CashLedger(){
   useEffect(()=>{req('/users/agents').then(setAgents).catch(()=>{})},[]);
 
   const loadAll=useCallback(async()=>{
+    setLoading(true);
     setLoadErr('');
     const qs=`from=${dateRange.from}&to=${dateRange.to}`;
     try{
@@ -47,6 +50,7 @@ export default function CashLedger(){
       setWithdrawals(w);
       setReturns(r);
     }catch(e){setLoadErr(e.message);}
+    finally{setLoading(false);}
   },[dateRange]);
 
   useEffect(()=>{loadAll();},[loadAll]);
@@ -103,9 +107,8 @@ export default function CashLedger(){
     {loadErr&&<p className="error" style={{marginBottom:12}}>{loadErr}</p>}
 
     {/* ── OVERVIEW TAB ── */}
-    {tab==='overview'&&<>
-      {!ledger&&!loadErr&&<p style={{padding:'40px 0',textAlign:'center',color:'#888'}}>Loading...</p>}
-      {ledger&&<>
+    {loading && <LoadingSpinner text="Calculating cash ledger totals & bank withdrawals..." />}
+    {!loading && ledger && <>
         <div className="ledger-stats">
           <div className="lstat green">
             <small>WITHDRAWN FROM BANK</small>
@@ -172,7 +175,6 @@ export default function CashLedger(){
           </div>
         </div>
       </>}
-    </>}
 
     {/* ── WITHDRAWALS TAB ── */}
     {tab==='withdraw'&&<div className="ledger-split">

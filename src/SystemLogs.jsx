@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import LoadingSpinner from './LoadingSpinner.jsx';
 import './system-logs.css';
 
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -328,10 +329,7 @@ export default function SystemLogs() {
       {/* ── Main Logs Table ───────────────────────────────────────────────── */}
       <div className="logs-table-card">
         {loading ? (
-          <div className="logs-loading">
-            <div className="spinner"></div>
-            <p>Fetching real-time activity and task logs...</p>
-          </div>
+          <LoadingSpinner text="Fetching real-time activity & audit logs..." />
         ) : !logs.length ? (
           <div className="logs-empty">
             <span style={{ fontSize: 36 }}>📭</span>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import LoadingSpinner from './LoadingSpinner.jsx';
 import './agent-jobs.css';
 
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -82,6 +83,7 @@ export default function AgentJobs({ role }) {
   const [jobs,    setJobs]    = useState([]);
   const [status,  setStatus]  = useState('');
   const [search,  setSearch]  = useState('');
+  const [loading, setLoading] = useState(true);
   const [selected,setSelected]= useState(null); // job detail modal
   const [updating,setUpdating]= useState(null); // job update modal
   const [msg,     setMsg]     = useState('');
@@ -89,10 +91,12 @@ export default function AgentJobs({ role }) {
 
   const admin = role === 'admin' || role === 'manager';
 
-  const load = () =>
+  const load = () => {
+    setLoading(true);
     json(`/jobs?status=${status}&search=${encodeURIComponent(search)}`)
-      .then(setJobs)
-      .catch(e => setMsg(e.message));
+      .then(d => { setJobs(d); setLoading(false); })
+      .catch(e => { setMsg(e.message); setLoading(false); });
+  };
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -194,9 +198,11 @@ export default function AgentJobs({ role }) {
       )}
 
       {/* ── Card Grid ──────────────────────────────────────────── */}
-      {jobs.length === 0
-        ? <p className="aj-empty">No jobs found.</p>
-        : (
+      {loading ? (
+        <LoadingSpinner text="Fetching assigned agent jobs & route history..." />
+      ) : jobs.length === 0 ? (
+        <p className="aj-empty">No jobs found.</p>
+      ) : (
           <div className="aj-grid">
             {jobs.map(job => {
               const loadedEv = [...(job.events || [])].reverse().find(e => e.status === 'cash_loaded');

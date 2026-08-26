@@ -23,6 +23,8 @@ import'./overrides.css';
 import'./area-dispatch.css';
 import'./ledger.css';
 import'./system-logs.css';
+import'./loader.css';
+import LoadingSpinner from './LoadingSpinner.jsx';
 
 const nativeFetch=window.fetch.bind(window);
 window.fetch=async(...args)=>{
@@ -99,7 +101,7 @@ function Dashboard({go}){
   const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const dayName=days[new Date().getDay()];
   useEffect(()=>{request('/dashboard').then(setD).catch(()=>{})},[]);
-  if(!d)return <Loading/>;
+  if(!d)return <Loading text="Loading command center overview & fleet statistics..."/>;
   const f=d.fleet||{};
   const today=(d.cash||{}).today||{};
   const month=(d.cash||{}).month||{};
@@ -206,6 +208,6 @@ function Assign(){const[id,setId]=useState(''),[t,setT]=useState(null),[msg,setM
 
 function Importer(){const[file,setFile]=useState(),[result,setResult]=useState(),[error,setError]=useState('');async function send(){const fd=new FormData();fd.append('file',file);try{setResult(await request('/imports',{method:'POST',body:fd}));setError('')}catch(e){setError(e.message)}}return <div className="import-card"><p className="eyebrow">CONTROLLED SYNCHRONIZATION</p><h3>Import official terminal status</h3><p>The official layer will update. Original locations, current assignments, payments and full movement history will remain untouched.</p><label className="drop"><input type="file" accept=".xls,.xlsx" onChange={e=>setFile(e.target.files[0])}/><b>{file?.name||'Choose Canada Terminal Status file'}</b><small>XLS or XLSX &#183; maximum 10 MB</small></label><button disabled={!file} onClick={send}>Run secure import &#8594;</button>{error&&<p className="error">{error}</p>}{result&&<div className="result">{['imported','new','updated','removed','unchanged'].map(k=><div key={k}><small>{k}</small><b>{result[k]}</b></div>)}</div>}</div>;}
 
-function Loading(){return <div className="loading">Loading operational data...</div>;}
+function Loading({text}){return <LoadingSpinner text={text||'Loading operational data...'}/>;}
 
 createRoot(document.getElementById('root')).render(<Shell/>);

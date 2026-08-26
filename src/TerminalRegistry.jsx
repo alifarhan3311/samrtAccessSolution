@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import LoadingSpinner from './LoadingSpinner.jsx';
 import './terminal.css';
 
 const money = v => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v || 0);
@@ -21,12 +22,15 @@ export default function TerminalRegistry() {
   const [q,        setQ]        = useState('');
   const [data,     setData]     = useState({ items: [] });
   const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(true);
   const [selected, setSelected] = useState(null); // mobile detail modal
 
-  const load = () =>
+  const load = () => {
+    setLoading(true);
     req('/terminals?limit=100&search=' + encodeURIComponent(q))
-      .then(setData)
-      .catch(e => setError(e.message));
+      .then(d => { setData(d); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  };
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -61,9 +65,10 @@ export default function TerminalRegistry() {
 
       {error && <p className="error">{error}</p>}
 
-      {/* ══════════════════════════════════════════════════════════
-          DESKTOP — existing table (hidden on mobile via CSS)
-      ══════════════════════════════════════════════════════════ */}
+      {loading ? (
+        <LoadingSpinner text="Fetching terminal registry data..." />
+      ) : (
+        <>
       <div className="table-wrap full-table tr-desktop">
         <table>
           <thead>
@@ -174,9 +179,10 @@ export default function TerminalRegistry() {
                 );
               })}
             </div>
-          )
-        }
+          )}
       </div>
+    </>
+  )}
 
       {/* ── Terminal Detail Modal (mobile) ──────────────────────── */}
       {selected && (

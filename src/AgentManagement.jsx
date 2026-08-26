@@ -1,4 +1,5 @@
 import React,{useEffect,useState}from'react';
+import LoadingSpinner from './LoadingSpinner.jsx';
 const authH=()=>({Authorization:`Bearer ${localStorage.getItem('token')}`});
 async function api(path,options={}){
   const r=await fetch('/api'+path,{...options,headers:{...(!options.body||options.body instanceof FormData?{}:{'Content-Type':'application/json'}),...authH(),...(options.headers||{})}});
@@ -17,12 +18,16 @@ export default function AgentManagement(){
   const[preview,setPreview]=useState(null);
   const[msg,setMsg]=useState('');
   const[saving,setSaving]=useState(false);
+  const[loading,setLoading]=useState(true);
   const[editing,setEditing]=useState(null);     // agent being edited
   const[resetting,setResetting]=useState(null);  // agent password reset modal
   const[newPwd,setNewPwd]=useState('');
   const[pwdMsg,setPwdMsg]=useState('');
 
-  const load=()=>api('/users/agents?all=1').then(setAgents);
+  const load=()=>{
+    setLoading(true);
+    api('/users/agents?all=1').then(d=>{setAgents(d);setLoading(false);}).catch(()=>setLoading(false));
+  };
   useEffect(()=>{load()},[]);
 
   const visible=showInactive?agents:agents.filter(a=>a.active!==false);
@@ -125,7 +130,7 @@ export default function AgentManagement(){
         </label>
       </div>
 
-      {visible.map(a=><article key={a._id} className={a.active===false?'agent-inactive':''}>
+      {loading ? <LoadingSpinner text="Loading agent directory..."/> : visible.map(a=><article key={a._id} className={a.active===false?'agent-inactive':''}>
         <div className="agent-avatar" style={{background:a.active===false?'#ddd':'#d5ff55',color:a.active===false?'#999':'#173e36'}}>
           {a.profilePicture?.url
             ?<img src={a.profilePicture.url} alt={a.name} style={{width:'100%',height:'100%',borderRadius:'50%',objectFit:'cover'}}/>

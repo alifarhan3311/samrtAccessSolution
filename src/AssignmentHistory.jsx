@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
+import LoadingSpinner from './LoadingSpinner.jsx';
 import './history.css';
 
 const money = v => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(v || 0);
@@ -21,9 +22,12 @@ export default function AssignmentHistory() {
   const [data,     setData]     = useState({ items: [], total: 0 });
   const [selected, setSelected] = useState(null);
   const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(true);
 
-  const refresh = () =>
-    loadHistory(filters).then(setData).catch(e => setError(e.message));
+  const refresh = () => {
+    setLoading(true);
+    loadHistory(filters).then(d => { setData(d); setLoading(false); }).catch(e => { setError(e.message); setLoading(false); });
+  };
 
   useEffect(() => {
     const t = setTimeout(refresh, 300);
@@ -96,10 +100,14 @@ export default function AssignmentHistory() {
 
       {error && <p className="error">{error}</p>}
 
-      <p className="history-count">
-        {data.total} assignment record{data.total !== 1 ? 's' : ''} found
-        {data.limited ? ' · Result limit reached' : ''}
-      </p>
+      {loading ? (
+        <LoadingSpinner text="Fetching ATM movement & assignment history..." />
+      ) : (
+        <>
+          <p className="history-count">
+            {data.total} assignment record{data.total !== 1 ? 's' : ''} found
+            {data.limited ? ' · Result limit reached' : ''}
+          </p>
 
       {/* ── Card Grid ────────────────────────────────────────── */}
       {data.items.length === 0
@@ -141,8 +149,9 @@ export default function AssignmentHistory() {
               </div>
             ))}
           </div>
-        )
-      }
+        )}
+        </>
+      )}
 
       {/* ── Detail Modal ─────────────────────────────────────── */}
       {selected && (

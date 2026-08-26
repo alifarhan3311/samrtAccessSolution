@@ -1,4 +1,5 @@
 import React,{useEffect,useState}from'react';
+import LoadingSpinner from './LoadingSpinner.jsx';
 const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...(o.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 const money=v=>'$'+Number(v||0).toLocaleString();
 const fmt=v=>v?new Date(v).toLocaleString('en-CA',{dateStyle:'medium',timeStyle:'short'}):'—';
@@ -6,11 +7,15 @@ const fmt=v=>v?new Date(v).toLocaleString('en-CA',{dateStyle:'medium',timeStyle:
 export default function Discrepancies(){
   const[data,setData]=useState({items:[],openCount:0,totalShortfall:0});
   const[statusFilter,setStatusFilter]=useState('open');
+  const[loading,setLoading]=useState(true);
   const[resolving,setResolving]=useState(null);
   const[resolveForm,setResolveForm]=useState({status:'resolved',resolveNote:''});
   const[msg,setMsg]=useState('');
 
-  const load=()=>req(`/discrepancies?status=${statusFilter}`).then(setData).catch(e=>setMsg(e.message));
+  const load=()=>{
+    setLoading(true);
+    req(`/discrepancies?status=${statusFilter}`).then(d=>{setData(d);setLoading(false);}).catch(e=>{setMsg(e.message);setLoading(false);});
+  };
   useEffect(()=>{load();},[statusFilter]);
 
   async function resolve(e){
@@ -26,6 +31,7 @@ export default function Discrepancies(){
   const surpluses=data.items.filter(d=>d.discrepancy<0);
 
   return <div style={{paddingTop:28}}>
+    {loading ? <LoadingSpinner text="Scanning cash discrepancies & shortfall alerts..."/> : <>
 
     {/* Summary cards */}
     <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:24}}>
@@ -173,5 +179,6 @@ export default function Discrepancies(){
         </form>
       </div>
     </div>}
+    </>}
   </div>;
 }
