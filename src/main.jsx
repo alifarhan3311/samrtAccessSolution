@@ -1,5 +1,6 @@
 import React,{useEffect,useState}from'react';
 import{createRoot}from'react-dom/client';
+import{BrowserRouter,Routes,Route,useNavigate,useLocation,Navigate}from'react-router-dom';
 import TerminalRegistry from './TerminalRegistry.jsx';
 import AssignmentHistory from './AssignmentHistory.jsx';
 import AssignTerminal from './AssignTerminal.jsx';
@@ -56,42 +57,96 @@ function Login({done}){
 
 function Shell(){
   const[user,setUser]=useState(()=>JSON.parse(localStorage.getItem('user')||'null'));
-  const[page,setPage]=useState(()=>user?.role==='agent'?'jobs':'dashboard');
-  if(!user)return <Login done={u=>{setUser(u);setPage(u.role==='agent'?'jobs':'dashboard')}}/>;
+  const navigate=useNavigate();
+  const location=useLocation();
+
+  if(!user)return <Login done={u=>{setUser(u);navigate(u.role==='agent'?'/jobs':'/dashboard')}}/>;
   const logout=()=>{localStorage.clear();setUser(null)};
   const admin=user.role==='admin', agent=user.role==='agent';
+
   const links=agent
-    ?[['jobs','My jobs & history','▣']]
-    :[['dashboard','Overview','⌂'],['notifications','Notifications','●'],['terminals','Terminals','▦'],
-      ['assign','ATM setup & location','⌖'],['dispatch','Single ATM dispatch','↗'],
-      ['area','Area route dispatch','⌘'],['jobs','Agent jobs & history','▣'],
-      ...(admin?[['agents','Manage agents','☺'],['ledger','Cash ledger','$'],['discrepancies','Cash discrepancies','⚠'],['history','ATM movement history','◷'],['logs','Activity & Audit Logs','📋']]:[]),
-      ['import','Official import','⇅']];
-  const titles={dashboard:'Command center',notifications:'Notifications & setup queue',terminals:'Terminal registry',assign:'ATM setup & current location',dispatch:'Single ATM dispatch',area:'Location area route dispatch',jobs:agent?'My jobs & completed history':'Agent jobs & assignment history',agents:'Agent management',ledger:'Cash ledger & flow',history:'ATM movement history',discrepancies:'Cash discrepancies & alerts',logs:'System Activity & Audit Logs',import:'Official data import'};
+    ?[['jobs','My jobs & history','▣','/jobs']]
+    :[['dashboard','Overview','⌂','/dashboard'],
+      ['notifications','Notifications','●','/notifications'],
+      ['terminals','Terminals','▦','/terminals'],
+      ['assign','ATM setup & location','⌖','/assign'],
+      ['dispatch','Single ATM dispatch','↗','/dispatch'],
+      ['area','Area route dispatch','⌘','/area'],
+      ['jobs','Agent jobs & history','▣','/jobs'],
+      ...(admin?[
+        ['agents','Manage agents','☺','/agents'],
+        ['ledger','Cash ledger','$','/ledger'],
+        ['discrepancies','Cash discrepancies','⚠','/discrepancies'],
+        ['history','ATM movement history','◷','/history'],
+        ['logs','Activity & Audit Logs','📋','/logs']
+      ]:[]),
+      ['import','Official import','⇅','/import']];
+
+  const titles={
+    dashboard:'Command center',
+    notifications:'Notifications & setup queue',
+    terminals:'Terminal registry',
+    assign:'ATM setup & current location',
+    dispatch:'Single ATM dispatch',
+    area:'Location area route dispatch',
+    jobs:agent?'My jobs & completed history':'Agent jobs & assignment history',
+    agents:'Agent management',
+    ledger:'Cash ledger & flow',
+    history:'ATM movement history',
+    discrepancies:'Cash discrepancies & alerts',
+    logs:'System Activity & Audit Logs',
+    import:'Official data import'
+  };
+
+  const go=(targetKey)=>{
+    const pathMap={
+      dashboard:'/dashboard',
+      notifications:'/notifications',
+      terminals:'/terminals',
+      assign:'/assign',
+      dispatch:'/dispatch',
+      area:'/area',
+      jobs:'/jobs',
+      agents:'/agents',
+      ledger:'/ledger',
+      discrepancies:'/discrepancies',
+      history:'/history',
+      logs:'/logs',
+      import:'/import'
+    };
+    navigate(pathMap[targetKey]||(targetKey.startsWith('/')?targetKey:`/${targetKey}`));
+  };
+
+  const currentPath=location.pathname.replace(/^\//,'')||(agent?'jobs':'dashboard');
+
   return <div className="shell">
     <aside>
       <div className="logo"><div className="mark">S</div><div><b>Smart Access</b><small>COMMAND CENTER</small></div></div>
-      <nav>{links.map(x=><button key={x[0]} className={page===x[0]?'active':''} onClick={()=>setPage(x[0])}><i>{x[2]}</i>{x[1]}</button>)}</nav>
+      <nav>{links.map(x=><button key={x[0]} className={location.pathname===x[3]||(x[0]==='dashboard'&&location.pathname==='/')?'active':''} onClick={()=>navigate(x[3])}><i>{x[2]}</i>{x[1]}</button>)}</nav>
       <div className="user"><span>{user.name?.[0]}</span><div><b>{user.name}</b><small>{user.role}</small></div><button onClick={logout}>&#8617;</button></div>
     </aside>
     <section className="content">
       <header>
-        <div><p className="eyebrow">ATM FLEET OPERATIONS</p><h2>{titles[page]||page}</h2></div>
+        <div><p className="eyebrow">ATM FLEET OPERATIONS</p><h2>{titles[currentPath]||currentPath}</h2></div>
         <div className="live"><span></span> Systems operational</div>
       </header>
-      {page==='dashboard'?<Dashboard go={setPage}/>
-      :page==='notifications'?<Notifications go={setPage}/>
-      :page==='terminals'?<TerminalRegistry/>
-      :page==='assign'?<AssignTerminal/>
-      :page==='dispatch'?<DailyDispatch done={()=>setPage('jobs')}/>
-      :page==='area'?<AreaDispatch done={()=>setPage('jobs')}/>
-      :page==='jobs'?<AgentJobs role={user.role}/>
-      :page==='agents'?<AgentManagement/>
-      :page==='ledger'?<CashLedger/>
-      :page==='discrepancies'?<Discrepancies/>
-      :page==='history'?<AssignmentHistory/>
-      :page==='logs'?<SystemLogs/>
-      :<OfficialImport/>}
+      <Routes>
+        <Route path="/" element={<Navigate to={agent ? '/jobs' : '/dashboard'} replace />} />
+        <Route path="/dashboard" element={<Dashboard go={go}/>} />
+        <Route path="/notifications" element={<Notifications go={go}/>} />
+        <Route path="/terminals" element={<TerminalRegistry/>} />
+        <Route path="/assign" element={<AssignTerminal/>} />
+        <Route path="/dispatch" element={<DailyDispatch done={()=>go('jobs')}/>} />
+        <Route path="/area" element={<AreaDispatch done={()=>go('jobs')}/>} />
+        <Route path="/jobs" element={<AgentJobs role={user.role}/>} />
+        <Route path="/agents" element={admin?<AgentManagement/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/ledger" element={admin?<CashLedger/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/discrepancies" element={admin?<Discrepancies/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/history" element={admin?<AssignmentHistory/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/logs" element={admin?<SystemLogs/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/import" element={<OfficialImport/>} />
+        <Route path="*" element={<Navigate to={agent ? '/jobs' : '/dashboard'} replace />} />
+      </Routes>
     </section>
   </div>;
 }
@@ -210,4 +265,8 @@ function Importer(){const[file,setFile]=useState(),[result,setResult]=useState()
 
 function Loading({text}){return <LoadingSpinner text={text||'Loading operational data...'}/>;}
 
-createRoot(document.getElementById('root')).render(<Shell/>);
+createRoot(document.getElementById('root')).render(
+  <BrowserRouter>
+    <Shell />
+  </BrowserRouter>
+);
