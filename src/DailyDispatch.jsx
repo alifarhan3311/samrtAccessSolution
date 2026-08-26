@@ -39,7 +39,8 @@ export default function DailyDispatch({done}){
   async function dispatch(e){
     e.preventDefault();
     try{
-      await req('/jobs/dispatch',{method:'POST',body:JSON.stringify({...f,terminalId:terminal.terminalId,cashToLoad:+f.cashToLoad})});
+      const ld=new Date();const localDate=`${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
+      await req('/jobs/dispatch',{method:'POST',body:JSON.stringify({...f,terminalId:terminal.terminalId,cashToLoad:+f.cashToLoad,localDate})});
       setMsg('Daily job assigned successfully.');
       setTerminal();setF({agentId:'',cashToLoad:'',dueAt:'',note:''});
       loadAgents();loadBal();done?.();

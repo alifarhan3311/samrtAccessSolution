@@ -82,6 +82,7 @@ export default function AreaDispatch({done}){
   async function send(e){
     e.preventDefault();
     try{
+      const ld=new Date();const localDate=`${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
       const result=await req('/jobs/dispatch-area',{method:'POST',body:JSON.stringify({
         ...form,
         locationAreas:selectedAreas,
@@ -89,6 +90,7 @@ export default function AreaDispatch({done}){
         terminalIds:selected,
         cashOverrides,
         agentOverrides,
+        localDate
       })});
       setMsg(`${result.assigned} ATMs assigned across ${selectedAreas.length} area(s). Total cash: $${result.totalCash.toLocaleString()}. ${result.skippedLocked} locked ATM(s) skipped.`);
       setTimeout(()=>done?.(),1200);
