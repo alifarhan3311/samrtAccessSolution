@@ -11,7 +11,10 @@ export default function DailyDispatch({done}){
   const[f,setF]=useState({agentId:'',cashToLoad:'',dueAt:'',note:''});
 
   const loadAgents=()=>req('/users/agents').then(setAgents);
-  const loadBal=()=>req('/cash/available').then(setBal).catch(()=>{});
+  const loadBal=()=>{
+    const ld=new Date();const localDate=`${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
+    return req(`/cash/available?localDate=${localDate}`).then(setBal).catch(()=>{});
+  };
 
   useEffect(()=>{loadAgents();loadBal();},[]);
 
@@ -94,7 +97,7 @@ export default function DailyDispatch({done}){
             </small>}
           </label>
           <label>Complete before
-            <input type="datetime-local" required value={f.dueAt} onChange={e=>setF({...f,dueAt:e.target.value})}/>
+            <input type="date" required value={f.dueAt} onChange={e=>setF({...f,dueAt:e.target.value})}/>
           </label>
         </div>
         <label>Daily instructions

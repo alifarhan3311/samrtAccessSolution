@@ -59,9 +59,9 @@ function jobsToCSV(jobs) {
       job.agent?.name || '', job.assignedBy?.name || '',
       job.wishAmount ?? '', job.cashToLoad ?? '',
       loadedEvent?.cashLoaded ?? '',
-      job.dueAt      ? new Date(job.dueAt).toLocaleString('en-CA')      : '',
-      job.approvedAt ? new Date(job.approvedAt).toLocaleString('en-CA') : '',
-      job.createdAt  ? new Date(job.createdAt).toLocaleString('en-CA')  : '',
+      job.dueAt      ? new Date(job.dueAt).toLocaleDateString('en-CA')      : '',
+      job.approvedAt ? new Date(job.approvedAt).toLocaleDateString('en-CA') : '',
+      job.createdAt  ? new Date(job.createdAt).toLocaleDateString('en-CA')  : '',
       job.locationArea || '',
       allNotes,
     ].map(v => v === '' || v == null ? '' : `"${String(v).replace(/"/g, '""')}"`);
@@ -257,7 +257,7 @@ export default function AgentJobs({ role }) {
                   {/* due date */}
                   <div className="aj-card-due">
                     <small>DUE</small>
-                    <span>{new Date(job.dueAt).toLocaleString('en-CA')}</span>
+                    <span>{new Date(job.dueAt).toLocaleDateString('en-CA')}</span>
                   </div>
 
                   {/* quick approve badge for admin */}
@@ -331,12 +331,12 @@ function JobDetailModal({ job, admin, onClose, onApprove, onProof, onUpdate }) {
           <div><small>CASH TO LOAD</small><span>${job.cashToLoad?.toLocaleString()}</span></div>
           <div>
             <small>DUE AT</small>
-            <span>{job.dueAt ? new Date(job.dueAt).toLocaleString('en-CA') : '—'}</span>
+            <span>{job.dueAt ? new Date(job.dueAt).toLocaleDateString('en-CA') : '—'}</span>
           </div>
           {job.approvedAt && (
             <div>
               <small>APPROVED AT</small>
-              <span>{new Date(job.approvedAt).toLocaleString('en-CA')}</span>
+              <span>{new Date(job.approvedAt).toLocaleDateString('en-CA')}</span>
             </div>
           )}
         </div>
@@ -349,7 +349,7 @@ function JobDetailModal({ job, admin, onClose, onApprove, onProof, onUpdate }) {
               <span className="aj-dm-dot" style={{ background: STATUS_COLOR[ev.status] || '#78958e' }} />
               <div className="aj-dm-event-body">
                 <b>{STATUS_LABEL[ev.status] || ev.status}</b>
-                <time>{new Date(ev.createdAt).toLocaleString('en-CA')} · {ev.createdBy?.name}</time>
+                <time>{new Date(ev.createdAt).toLocaleDateString('en-CA')} · {ev.createdBy?.name}</time>
                 {ev.note && <p>{ev.note}</p>}
                 {ev.cashLoaded != null && (
                   <p className="aj-dm-cash-loaded">

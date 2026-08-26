@@ -59,7 +59,7 @@ function formatTimestamp(ts) {
   else relative = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   return {
-    full: d.toLocaleString('en-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    full: d.toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' }),
     relative
   };
 }
@@ -164,7 +164,7 @@ export default function SystemLogs() {
       'Cash To Load', 'Cash Loaded', 'Notes'
     ];
     const rows = logs.map(l => [
-      l.timestamp ? new Date(l.timestamp).toLocaleString('en-CA') : '',
+      l.timestamp ? new Date(l.timestamp).toLocaleDateString('en-CA') : '',
       l.action || '',
       l.category || '',
       l.actor?.name || '',
@@ -556,7 +556,7 @@ export default function SystemLogs() {
                 {selectedLog.wishAmount > 0 && <div className="info-row"><span>Wish Amount:</span> <b>{money(selectedLog.wishAmount)}</b></div>}
                 {selectedLog.cashToLoad > 0 && <div className="info-row"><span>Cash Assigned to Load:</span> <b>{money(selectedLog.cashToLoad)}</b></div>}
                 {selectedLog.cashLoaded > 0 && <div className="info-row"><span>Actual Cash Loaded by Agent:</span> <b style={{ color: '#16a34a' }}>{money(selectedLog.cashLoaded)}</b></div>}
-                {selectedLog.dueAt && <div className="info-row"><span>Due Deadline:</span> <b>{new Date(selectedLog.dueAt).toLocaleString('en-CA')}</b></div>}
+                {selectedLog.dueAt && <div className="info-row"><span>Due Deadline:</span> <b>{new Date(selectedLog.dueAt).toLocaleDateString('en-CA')}</b></div>}
               </div>
             </div>
 

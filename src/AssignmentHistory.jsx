@@ -4,7 +4,7 @@ import LoadingSpinner from './LoadingSpinner.jsx';
 import './history.css';
 
 const money = v => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(v || 0);
-const when  = v => v ? new Date(v).toLocaleString('en-CA') : 'Current';
+const when  = v => v ? new Date(v).toLocaleDateString('en-CA') : 'Current';
 
 async function loadHistory(filters) {
   const query = new URLSearchParams({ ...filters, limit: '5000' });

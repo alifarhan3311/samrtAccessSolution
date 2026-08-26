@@ -117,8 +117,18 @@ app.delete('/api/cash/returns/:id',auth,permit('admin'),async(req,res,next)=>{tr
 
 // ── Cash available balance (today) ───────────────────────────────────────────
 app.get('/api/cash/available',auth,permit('admin','manager'),async(req,res,next)=>{try{
-  const today=new Date(); today.setHours(0,0,0,0);
-  const tomorrow=new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+  // Use client-supplied local date (YYYY-MM-DD) so server timezone (UTC on Vercel)
+  // never mismatches client timezone (e.g. PKT UTC+5).
+  let today, tomorrow;
+  if(req.query.localDate && /^\d{4}-\d{2}-\d{2}$/.test(req.query.localDate)){
+    today   = new Date(req.query.localDate + 'T00:00:00.000Z');
+    tomorrow= new Date(req.query.localDate + 'T00:00:00.000Z');
+    tomorrow.setUTCDate(tomorrow.getUTCDate()+1);
+  } else {
+    // fallback: use server local midnight
+    today=new Date(); today.setHours(0,0,0,0);
+    tomorrow=new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+  }
   const dq={date:{$gte:today,$lt:tomorrow}};
   const jq={createdAt:{$gte:today,$lt:tomorrow}};
   const[withdrawn,dispatched,returned]=await Promise.all([

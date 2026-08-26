@@ -16,7 +16,8 @@ export default function AreaDispatch({done}){
   const[loadingTerminals,setLoadingTerminals]=useState(false);
 
   useEffect(()=>{
-    Promise.all([req('/location-areas'),req('/users/agents'),req('/cash/available').catch(()=>null)])
+    const ld=new Date();const localDate=`${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
+    Promise.all([req('/location-areas'),req('/users/agents'),req(`/cash/available?localDate=${localDate}`).catch(()=>null)])
       .then(([a,g,b])=>{setAreas(a);setAgents(g);if(b)setBal(b);});
   },[]);
 
@@ -157,7 +158,7 @@ export default function AreaDispatch({done}){
           </select>
         </label>
         <label>Complete before
-          <input type="datetime-local" value={form.dueAt} onChange={e=>setForm({...form,dueAt:e.target.value})} required/>
+          <input type="date" value={form.dueAt} onChange={e=>setForm({...form,dueAt:e.target.value})} required/>
         </label>
       </div>
     </section>

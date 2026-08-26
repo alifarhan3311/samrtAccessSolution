@@ -16,7 +16,7 @@ async function req(path, options = {}) {
 }
 
 const show = v => (v === 0 ? 0 : v || '—');
-const fmt  = v => v ? new Date(v).toLocaleString('en-CA') : '—';
+const fmt  = v => v ? new Date(v).toLocaleDateString('en-CA') : '—';
 
 export default function TerminalRegistry() {
   const [q,        setQ]        = useState('');
