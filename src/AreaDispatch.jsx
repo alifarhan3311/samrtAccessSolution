@@ -5,7 +5,7 @@ const money2=v=>'$'+Number(v||0).toLocaleString();
 export default function AreaDispatch({done}){
   const[areas,setAreas]=useState([]);
   const[agents,setAgents]=useState([]);
-  const[area,setArea]=useState('');
+  const[selectedAreas,setSelectedAreas]=useState([]);
   const[terminals,setTerminals]=useState([]);
   const[selected,setSelected]=useState([]);
   const[cashOverrides,setCashOverrides]=useState({});
@@ -19,15 +19,15 @@ export default function AreaDispatch({done}){
       .then(([a,g,b])=>{setAreas(a);setAgents(g);if(b)setBal(b);});
   },[]);
 
-  async function choose(value){
-    setArea(value);setSelected([]);setTerminals([]);setCashOverrides({});setMsg('');
-    if(!value)return;
+  async function loadTerminalsForAreas(areaList){
+    setSelectedAreas(areaList);setSelected([]);setTerminals([]);setCashOverrides({});setMsg('');
+    if(!areaList.length)return;
     setLoadingTerminals(true);
     try{
-      const items=await req('/location-areas/'+encodeURIComponent(value)+'/terminals');
+      const param=encodeURIComponent(areaList.join(','));
+      const items=await req('/location-areas/'+param+'/terminals');
       setTerminals(items);
       setSelected(items.filter(t=>!t.activeJob&&t.official?.status!=='Inactive').map(t=>t.terminalId));
-      // set default cash overrides from requiredCash
       const defaults={};
       items.forEach(t=>{ defaults[t.terminalId]=t.requiredCash||0; });
       setCashOverrides(defaults);
@@ -36,6 +36,13 @@ export default function AreaDispatch({done}){
     }finally{
       setLoadingTerminals(false);
     }
+  }
+
+  function toggleArea(areaName){
+    const nextAreas=selectedAreas.includes(areaName)
+      ? selectedAreas.filter(a=>a!==areaName)
+      : [...selectedAreas, areaName];
+    loadTerminalsForAreas(nextAreas);
   }
 
   function toggle(id){setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);}
@@ -51,11 +58,12 @@ export default function AreaDispatch({done}){
     try{
       const result=await req('/jobs/dispatch-area',{method:'POST',body:JSON.stringify({
         ...form,
-        locationArea:area,
+        locationAreas:selectedAreas,
+        locationArea:selectedAreas.join(', '),
         terminalIds:selected,
-        cashOverrides, // per-terminal cash amounts in CAD
+        cashOverrides,
       })});
-      setMsg(`${result.assigned} ATMs assigned. Total cash to handover: $${result.totalCash.toLocaleString()}. ${result.skippedLocked} locked ATM(s) skipped.`);
+      setMsg(`${result.assigned} ATMs assigned across ${selectedAreas.length} area(s). Total cash: $${result.totalCash.toLocaleString()}. ${result.skippedLocked} locked ATM(s) skipped.`);
       setTimeout(()=>done?.(),1200);
     }catch(e){setMsg(e.message);}
   }
@@ -67,8 +75,8 @@ export default function AreaDispatch({done}){
   return <main className="area-page">
     <section className="area-control">
       <p className="eyebrow">ROUTE PLANNER</p>
-      <h2>Assign a complete Location Area</h2>
-      <p>Select North A, West C or another operational area. Every available ATM in its cities becomes part of the agent's route.</p>
+      <h2>Assign Location Area Routes</h2>
+      <p>Select one or multiple operational areas (e.g. North A, West C). All available ATMs in the selected areas become part of the agent's route.</p>
 
       {/* Available balance banner */}
       {bal&&<div className={'balance-banner '+(bal.available<=0?'balance-warn':'balance-ok')} style={{marginBottom:16}}>
@@ -79,13 +87,45 @@ export default function AreaDispatch({done}){
           Returned {money2(bal.returned)}
         </div>
       </div>}
-      <div className="area-fields">
-        <label>Location Area
-          <select value={area} onChange={e=>choose(e.target.value)} disabled={loadingTerminals}>
-            <option value="">Select area...</option>
-            {areas.map(a=><option key={a.name} value={a.name}>{a.name} — {a.terminals} ATMs</option>)}
-          </select>
+
+      <div style={{marginBottom:16}}>
+        <label style={{fontSize:12,fontWeight:700,display:'block',marginBottom:8,color:'#183d36'}}>
+          SELECT LOCATION AREAS (1 OR MULTIPLE)
         </label>
+        <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+          {areas.map(a=>{
+            const isSelected=selectedAreas.includes(a.name);
+            return <button
+              key={a.name}
+              type="button"
+              onClick={()=>toggleArea(a.name)}
+              disabled={loadingTerminals}
+              style={{
+                border:isSelected?'2px solid #183d36':'1px solid #d8dfda',
+                background:isSelected?'#183d36':'#fff',
+                color:isSelected?'#fff':'#333',
+                padding:'8px 14px',
+                borderRadius:20,
+                cursor:'pointer',
+                fontWeight:700,
+                fontSize:13,
+                display:'flex',
+                alignItems:'center',
+                gap:6,
+                transition:'all .15s ease'
+              }}
+            >
+              <span>{isSelected?'✓':'+'}</span>
+              <b>{a.name}</b>
+              <span style={{fontSize:11,opacity:isSelected?.9:.6,background:isSelected?'#ffffff25':'#f0f4f1',padding:'2px 6px',borderRadius:10,color:isSelected?'#fff':'#555'}}>
+                {a.terminals} ATMs
+              </span>
+            </button>;
+          })}
+        </div>
+      </div>
+
+      <div className="area-fields" style={{gridTemplateColumns:'1fr 1fr'}}>
         <label>Assign Agent
           <select value={form.agentId} onChange={e=>setForm({...form,agentId:e.target.value})} required>
             <option value="">Select agent...</option>
@@ -100,12 +140,12 @@ export default function AreaDispatch({done}){
 
     {loadingTerminals&&<div className="area-loading-card">
       <div className="area-spinner"></div>
-      <p>Fetching ATMs and building route checklist for <b>{area}</b>...</p>
+      <p>Fetching ATMs and building route checklist for <b>{selectedAreas.join(', ')}</b>...</p>
     </div>}
 
-    {area&&!loadingTerminals&&<form onSubmit={send}>
+    {selectedAreas.length>0&&!loadingTerminals&&<form onSubmit={send}>
       <div className="route-summary">
-        <div><small>AREA</small><b>{area}</b></div>
+        <div><small>SELECTED AREAS</small><b>{selectedAreas.join(', ')}</b></div>
         <div><small>CITIES</small><b>{[...new Set(terminals.map(t=>t.current?.city||t.official?.city).filter(Boolean))].join(', ')||'Not available'}</b></div>
         <div><small>SELECTED ATMs</small><b>{selected.length}</b></div>
         <div><small>TOTAL CASH TO HANDOVER</small><b style={{color:overBudget?'#a63e36':'inherit'}}>{money2(total)}{overBudget?` ⚠ exceeds ${money2(available)} available`:''}</b></div>
@@ -128,7 +168,7 @@ export default function AreaDispatch({done}){
             <input type="checkbox" disabled={isDisabled} checked={isSelected} onChange={()=>toggle(t.terminalId)}/>
             <div>
               <b>{t.terminalId} · {t.current?.businessName||t.official?.name} {isInactive&&<span style={{color:'#a63e36',fontSize:11,fontWeight:800,marginLeft:6}}>(INACTIVE)</span>}</b>
-              <span>{t.current?.address||t.official?.address} · {t.current?.city||t.official?.city}</span>
+              <span>{t.current?.address||t.official?.address} · {t.current?.city||t.official?.city} &nbsp; <span style={{background:'#edf2f0',padding:'1px 6px',borderRadius:8,fontWeight:700,fontSize:10,color:'#357064'}}>{t.official?.locationArea}</span></span>
             </div>
             <section>
               <small>WISH / BALANCE</small>
