@@ -1,0 +1,142 @@
+/* ═══════════════════════════════════════════════════════════════
+   ROUTE SHEET (PRINTABLE)
+   ═══════════════════════════════════════════════════════════════ */
+.route-sheet-page {
+  padding: 0;
+}
+.rs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 0 20px;
+}
+.rs-header h3 {
+  font: 700 22px Manrope;
+  margin: 5px 0 0;
+}
+.rs-filters {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+}
+.rs-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #737d77;
+  text-transform: uppercase;
+}
+.rs-filters input, .rs-filters select {
+  border: 1px solid #dce1dc;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  color: #245d4f;
+  outline: none;
+}
+.rs-paper {
+  background: #fff;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  margin-top: 10px;
+}
+.rs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  color: #000;
+}
+.rs-table th, .rs-table td {
+  border: 1px solid #000;
+  padding: 8px;
+  vertical-align: middle;
+}
+.rs-table th {
+  background: #eaeaea;
+  font-weight: bold;
+  text-align: center;
+}
+.rs-dba-cell {
+  line-height: 1.4;
+}
+.rs-area-row td {
+  background: #f4f4f4;
+  font-weight: bold;
+  font-size: 14px;
+}
+.rs-total-row td {
+  background: #eaeaea;
+  font-size: 14px;
+}
+.rs-blank-cell {
+  background: #fff;
+  min-width: 60px;
+}
+.rs-blank-cell.p-0 {
+  padding: 0;
+}
+.rs-input {
+  width: 100%;
+  height: 100%;
+  min-height: 35px;
+  border: none;
+  background: transparent;
+  outline: none;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a4d3f; /* Slightly dark green so it's readable */
+}
+.rs-input::placeholder {
+  color: #bbb;
+  font-weight: normal;
+}
+/* Hide number input spinners */
+.rs-input::-webkit-outer-spin-button,
+.rs-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.rs-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+@media print {
+  @page { margin: 10mm; size: landscape; }
+  body * {
+    visibility: hidden;
+  }
+  .rs-paper, .rs-paper * {
+    visibility: visible;
+  }
+  .rs-paper {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+  aside { display: none !important; }
+  header { display: none !important; }
+  
+  /* Ensure inputs print just like plain text */
+  .rs-input {
+    color: #000;
+    font-size: 12px;
+    font-weight: normal;
+  }
+  .rs-input::placeholder {
+    color: transparent;
+  }
+}

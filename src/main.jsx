@@ -7,6 +7,7 @@ import AssignTerminal from './AssignTerminal.jsx';
 import DailyDispatch from './DailyDispatch.jsx';
 import AreaDispatch from './AreaDispatch.jsx';
 import AgentJobs from './AgentJobs.jsx';
+import RouteSheet from './RouteSheet.jsx';
 import AgentManagement from './AgentManagement.jsx';
 import OfficialImport from './OfficialImport.jsx';
 import Notifications from './Notifications.jsx';
@@ -65,7 +66,8 @@ function Shell(){
   const admin=user.role==='admin', agent=user.role==='agent';
 
   const links=agent
-    ?[['jobs','Daily agent load','▣','/jobs']]
+    ?[['jobs','Daily agent load','▣','/jobs'],
+      ['routesheet','Daily route','🖨','/routesheet']]
     :[['dashboard','Overview','⌂','/dashboard'],
       ['notifications','Notifications','●','/notifications'],
       ['terminals','Terminals','▦','/terminals'],
@@ -73,6 +75,7 @@ function Shell(){
       ['dispatch','Single ATM dispatch','↗','/dispatch'],
       ['area','Area route dispatch','⌘','/area'],
       ['jobs','Daily agent load','▣','/jobs'],
+      ['routesheet','Daily route','🖨','/routesheet'],
       ...(admin?[
         ['agents','Manage agents','☺','/agents'],
         ['ledger','Cash ledger','$','/ledger'],
@@ -90,6 +93,7 @@ function Shell(){
     dispatch:'Single ATM dispatch',
     area:'Location area route dispatch',
     jobs:'Daily agent load',
+    routesheet:'Daily Route Sheet',
     agents:'Agent management',
     ledger:'Cash ledger & flow',
     history:'ATM movement history',
@@ -107,6 +111,7 @@ function Shell(){
       dispatch:'/dispatch',
       area:'/area',
       jobs:'/jobs',
+      routesheet:'/routesheet',
       agents:'/agents',
       ledger:'/ledger',
       discrepancies:'/discrepancies',
@@ -139,6 +144,7 @@ function Shell(){
         <Route path="/dispatch" element={<DailyDispatch done={()=>go('jobs')}/>} />
         <Route path="/area" element={<AreaDispatch done={()=>go('jobs')}/>} />
         <Route path="/jobs" element={<AgentJobs role={user.role}/>} />
+        <Route path="/routesheet" element={<RouteSheet/>} />
         <Route path="/agents" element={admin?<AgentManagement/>:<Navigate to="/jobs" replace/>} />
         <Route path="/ledger" element={admin?<CashLedger/>:<Navigate to="/jobs" replace/>} />
         <Route path="/discrepancies" element={admin?<Discrepancies/>:<Navigate to="/jobs" replace/>} />
