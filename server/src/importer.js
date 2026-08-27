@@ -74,6 +74,7 @@ function extractCanadaStatus(row, headers) {
     lastError:         clean(pick(row, headers, [/last\s*error/i])),
     lastCommunication: clean(pick(row, headers, [/last\s*comm/i])),
     lastWithdrawalAt:  date(pick(row, headers, [/last\s*withdrawal/i])),
+    locationArea:      clean(pick(row, headers, [/location\s*area/i])),
     sourcePresent:     true,
     lastSyncedAt:      new Date(),
   };
@@ -99,6 +100,7 @@ function extractTerminalManagement(row, headers) {
     withdrawalCount:    num(pick(row, headers, [/withdrawal\s*count/i])),
     dispensedAmount:    num(pick(row, headers, [/dispensed\s*amount/i])),
     terminalModel:      clean(pick(row, headers, [/^model$/i])),
+    locationArea:       clean(pick(row, headers, [/location\s*area/i])),
     sourcePresent:      true,
     lastSyncedAt:       new Date(),
   };
@@ -114,7 +116,6 @@ function toOfficialSet(fields) {
   return set;
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
 async function importWorkbook(buffer, fileName, userId) {
   const book  = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const sheet = book.Sheets[book.SheetNames[0]];
@@ -124,44 +125,55 @@ async function importWorkbook(buffer, fileName, userId) {
   if (hi < 0) throw new Error('Could not locate a Terminal ID header row in this file.');
 
   const headers = rows[hi];
-  const data    = rows.slice(hi + 1).filter(r => clean(pick(r, headers, [/terminal\s*id/i])));
-  const format  = detectFormat(headers);
+  // Extract data rows and valid terminal IDs
+  const rawData = rows.slice(hi + 1);
+  const data = [];
+  const seen = new Set();
+  
+  for (const r of rawData) {
+    const tid = clean(pick(r, headers, [/terminal\s*id/i])).toUpperCase();
+    if (tid && !seen.has(tid)) {
+      seen.add(tid);
+      data.push({ row: r, terminalId: tid });
+    }
+  }
 
-  const seen    = [];
+  const format = detectFormat(headers);
+  const totals = { imported: data.length, new: 0, updated: 0, removed: 0, unchanged: 0, format };
   const changes = [];
-  const totals  = { imported: data.length, new: 0, updated: 0, removed: 0, unchanged: 0, format };
 
-  for (const row of data) {
-    const terminalId = clean(pick(row, headers, [/terminal\s*id/i])).toUpperCase();
-    if (!terminalId) continue;
-    seen.push(terminalId);
+  // ── 1. PRE-FETCH ALL EXISTING TERMINALS IN BULK ──────────────────────
+  const terminalIdsArray = Array.from(seen);
+  const existingTerminalsList = await Terminal.find({ terminalId: { $in: terminalIdsArray } }).lean();
+  const existingMap = new Map(existingTerminalsList.map(t => [t.terminalId, t]));
 
+  const bulkOps = [];
+  const discrepancyPromises = [];
+
+  // ── 2. PROCESS ROWS IN MEMORY & PREPARE BULK OPERATIONS ──────────────
+  for (const { row, terminalId } of data) {
     // Raw row stored for audit trail
     const raw = Object.fromEntries(headers.map((h, i) => [clean(h) || `column_${i + 1}`, row[i]]));
-
+    
     // Extract only the fields this format provides
     const extracted = format === 'terminal_management'
       ? extractTerminalManagement(row, headers)
       : extractCanadaStatus(row, headers);
 
-    // Build partial dotted-path $set (won't overwrite fields from the other format)
     const partialSet = toOfficialSet({ ...extracted, raw });
-
-    const existing = await Terminal.findOne({ terminalId });
+    const existing = existingMap.get(terminalId);
 
     if (!existing) {
-      // ── New terminal ──────────────────────────────────────────────────────
-      // On first insert we need a full official object; fill missing fields with defaults
+      // New terminal
       const officialDoc = {
         status: 'Unknown', name: '', address: '', city: '', locationArea: '',
         sourcePresent: true, lastSyncedAt: new Date(),
         ...extracted, raw,
       };
 
-      // Preserve wishAmount if set (only Canada Status carries it; Terminal Management doesn't)
       const needsSetup = !officialDoc.wishAmount || officialDoc.wishAmount <= 0;
 
-      await Terminal.create({
+      const newDoc = {
         terminalId,
         official: officialDoc,
         original: {
@@ -176,30 +188,39 @@ async function importWorkbook(buffer, fileName, userId) {
         },
         setupRequired: needsSetup,
         setupReason:   needsSetup ? 'New terminal requires Wish Amount and operational setup' : undefined,
-      });
+      };
 
+      bulkOps.push({ insertOne: { document: newDoc } });
       changes.push({ terminalId, type: 'new', format, after: extracted, setupRequired: needsSetup });
       totals.new++;
 
     } else {
-      // ── Existing terminal — partial update ────────────────────────────────
-
-      // Discrepancy check only when Canada Status file brings a new cashBalance
+      // Existing terminal — discrepancy checks
       if (format === 'canada_status' && extracted.cashBalance != null) {
-        try {
-          const disc = await checkDiscrepancies(terminalId, existing._id, extracted.cashBalance, null);
-          if (disc) changes.push({ terminalId, type: 'discrepancy', discrepancy: disc.discrepancy, expected: disc.expected, actual: disc.actual });
-        } catch (e) { console.error('Discrepancy check error:', e.message); }
+        // Queue the discrepancy check for parallel execution later
+        discrepancyPromises.push(
+          checkDiscrepancies(terminalId, existing._id, extracted.cashBalance, null)
+            .catch(e => { console.error('Discrepancy check error:', e.message); return null; })
+        );
       }
 
-      // Only update if something actually changed
+      // Check if anything changed
       const changedFields = Object.entries(partialSet)
-        .filter(([k, v]) => String(existing.getPath ? existing.getPath(k) : '') !== String(v ?? ''))
-        .map(([k, v]) => ({ field: k, previous: existing.getPath?.(k) ?? '', current: v }));
-
-      await Terminal.updateOne({ _id: existing._id }, { $set: partialSet });
+        .filter(([k, v]) => {
+          const pathKeys = k.split('.');
+          let existingVal = existing;
+          for (const pk of pathKeys) existingVal = existingVal?.[pk];
+          return String(existingVal ?? '') !== String(v ?? '');
+        })
+        .map(([k, v]) => {
+          const pathKeys = k.split('.');
+          let existingVal = existing;
+          for (const pk of pathKeys) existingVal = existingVal?.[pk];
+          return { field: k, previous: existingVal ?? '', current: v };
+        });
 
       if (changedFields.length) {
+        bulkOps.push({ updateOne: { filter: { _id: existing._id }, update: { $set: partialSet } } });
         changes.push({ terminalId, type: 'updated', format, fields: changedFields });
         totals.updated++;
       } else {
@@ -208,31 +229,46 @@ async function importWorkbook(buffer, fileName, userId) {
     }
   }
 
-  // Terminals absent from this file → mark sourcePresent false (Canada Status only)
-  // Terminal Management is a supplementary file — we don't use it to mark terminals as removed
+  // ── 3. EXECUTE BULK WRITE & PARALLEL DISCREPANCY CHECKS ──────────────
+  if (bulkOps.length > 0) {
+    await Terminal.bulkWrite(bulkOps, { ordered: false });
+  }
+
+  if (discrepancyPromises.length > 0) {
+    const discrepancyResults = await Promise.all(discrepancyPromises);
+    for (const disc of discrepancyResults) {
+      if (disc) {
+        changes.push({ terminalId: disc.terminalId, type: 'discrepancy', discrepancy: disc.discrepancy, expected: disc.expected, actual: disc.actual });
+      }
+    }
+  }
+
+  // ── 4. HANDLE REMOVED/MISSING TERMINALS ──────────────────────────────
   let removedItems = [];
   if (format === 'canada_status') {
     removedItems = await Terminal.find(
-      { terminalId: { $nin: seen }, 'official.sourcePresent': true }
+      { terminalId: { $nin: terminalIdsArray }, 'official.sourcePresent': true }
     ).select('terminalId official.name official.city').lean();
 
-    const removed = await Terminal.updateMany(
-      { terminalId: { $nin: seen }, 'official.sourcePresent': true },
-      { $set: { 'official.sourcePresent': false } }
-    );
-    totals.removed = removed.modifiedCount;
-    changes.push(...removedItems.map(t => ({
-      terminalId: t.terminalId, type: 'removed',
-      name: t.official?.name, city: t.official?.city,
-    })));
+    if (removedItems.length > 0) {
+      const removed = await Terminal.updateMany(
+        { terminalId: { $nin: terminalIdsArray }, 'official.sourcePresent': true },
+        { $set: { 'official.sourcePresent': false } }
+      );
+      totals.removed = removed.modifiedCount;
+      changes.push(...removedItems.map(t => ({
+        terminalId: t.terminalId, type: 'removed',
+        name: t.official?.name, city: t.official?.city,
+      })));
+    }
   }
 
+  // ── 5. RECORD IMPORT RUN ─────────────────────────────────────────────
   const discrepancyCount = changes.filter(c => c.type === 'discrepancy').length;
   totals.discrepancies = discrepancyCount;
 
   const run = await ImportRun.create({ fileName, importedBy: userId, totals, changes });
 
-  // Backfill importRunId on discrepancies that were created with null runId
   if (discrepancyCount > 0) {
     const discTerminalIds = changes.filter(c => c.type === 'discrepancy').map(c => c.terminalId);
     await CashDiscrepancy.updateMany(

@@ -76,10 +76,10 @@ export default function TerminalRegistry() {
               <th>Status</th>
               <th>Terminal ID</th>
               <th>Temp Name</th>
-              <th>Original Name</th>
-              <th className="current-head">Current Location / Address</th>
-              <th className="current-head">Current City</th>
-              <th>Official Address</th>
+              <th>Name</th>
+              <th>Address</th>
+              <th>City</th>
+              <th>Location Area</th>
               <th>Wish Amount</th>
               <th>Cash Balance</th>
               <th>Cashloading</th>
@@ -109,12 +109,9 @@ export default function TerminalRegistry() {
                   <td><b>{t.terminalId}</b></td>
                   <td>{show(t.official?.tempName)}</td>
                   <td>{show(t.original?.businessName || t.official?.name)}</td>
-                  <td className="current-location">
-                    <b>{show(t.current?.businessName || t.official?.tempName || t.original?.businessName)}</b>
-                    <small>{show(currentAddress)}</small>
-                  </td>
-                  <td className="current-city">{show(currentCity)}</td>
-                  <td className="wide-cell">{show(t.official?.address)}</td>
+                  <td className="wide-cell">{show(currentAddress)}</td>
+                  <td>{show(currentCity)}</td>
+                  <td>{show(t.official?.locationArea)}</td>
                   <td>{money(t.official?.wishAmount)}</td>
                   <td>{money(t.official?.cashBalance)}</td>
                   <td>{show(t.official?.cashLoading)}</td>
@@ -235,6 +232,7 @@ function TerminalModal({ t, onClose, onStatusChange }) {
 
           <div className="tr-modal-rows">
             {[
+              ['Location Area',       show(t.official?.locationArea)],
               ['Temp Name',           show(t.official?.tempName)],
               ['Wish Amount',         money(t.official?.wishAmount)],
               ['Cash Balance',        money(t.official?.cashBalance)],
