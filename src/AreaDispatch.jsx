@@ -197,7 +197,7 @@ export default function AreaDispatch({done}){
           const currentBills=Math.floor(currentCad/20);
           const assignedAgent=agentOverrides[t.terminalId]||form.agentId||'';
 
-          return <label key={t.terminalId} className={isDisabled?'locked-atm':''}>
+          return <div key={t.terminalId} className={`area-atm-row ${isDisabled?'locked-atm':''}`}>
             <input type="checkbox" disabled={isDisabled} checked={isSelected} onChange={()=>toggle(t.terminalId)}/>
             <div>
               <b>{t.terminalId} · {t.current?.businessName||t.official?.name} {isInactive&&<span style={{color:'#a63e36',fontSize:11,fontWeight:800,marginLeft:6}}>(INACTIVE)</span>}</b>
@@ -257,7 +257,7 @@ export default function AreaDispatch({done}){
                 </div>
               </>
             )}
-          </label>;
+          </div>;
         })}
       </div>
 
