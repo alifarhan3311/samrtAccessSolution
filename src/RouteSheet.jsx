@@ -20,7 +20,7 @@ export default function RouteSheet() {
   const user = token ? JSON.parse(atob(token.split('.')[1])) : null;
   const isAgent = user?.role === 'agent';
 
-  const [agentId, setAgentId] = useState(isAgent ? user._id : '');
+  const [agentId, setAgentId] = useState(isAgent ? (user.sub || user.id || user._id) : '');
   const [date, setDate] = useState(() => {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -38,7 +38,7 @@ export default function RouteSheet() {
   }, [isAgent]);
 
   const loadData = () => {
-    if (!agentId) return setGroups([]);
+    if (!isAgent && !agentId) return setGroups([]);
     setLoading(true);
     setError('');
     const qs = new URLSearchParams();
@@ -114,7 +114,7 @@ export default function RouteSheet() {
 
       {error && <p className="error no-print">{error}</p>}
       
-      {!agentId ? (
+      {!agentId && !isAgent ? (
         <p className="aj-empty no-print">Please select an agent to view their route sheet.</p>
       ) : loading ? (
         <p className="no-print" style={{ padding: '40px', textAlign: 'center' }}>Loading route sheet...</p>
