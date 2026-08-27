@@ -2,6 +2,7 @@ import React,{useEffect,useState}from'react';
 import LoadingSpinner from './LoadingSpinner.jsx';
 const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 const money2=v=>'$'+Number(v||0).toLocaleString();
+const fmt=v=>v?new Date(v).toLocaleDateString('en-CA'):'N/A';
 
 export default function AreaDispatch({done}){
   const[areas,setAreas]=useState([]);
@@ -11,6 +12,7 @@ export default function AreaDispatch({done}){
   const[selected,setSelected]=useState([]);
   const[cashOverrides,setCashOverrides]=useState({});
   const[agentOverrides,setAgentOverrides]=useState({});
+  const[noteOverrides,setNoteOverrides]=useState({});
   const[form,setForm]=useState({agentId:'',dueAt:'',note:''});
   const[msg,setMsg]=useState('');
   const[bal,setBal]=useState(null);
@@ -25,7 +27,7 @@ export default function AreaDispatch({done}){
   },[]);
 
   async function loadTerminalsForAreas(areaList){
-    setSelectedAreas(areaList);setSelected([]);setTerminals([]);setCashOverrides({});setAgentOverrides({});setMsg('');
+    setSelectedAreas(areaList);setSelected([]);setTerminals([]);setCashOverrides({});setAgentOverrides({});setNoteOverrides({});setMsg('');
     if(!areaList.length)return;
     setLoadingTerminals(true);
     try{
@@ -36,12 +38,15 @@ export default function AreaDispatch({done}){
       setSelected(activeIds);
       const defaultCash={};
       const defaultAgents={};
+      const defaultNotes={};
       items.forEach(t=>{
         defaultCash[t.terminalId]=t.requiredCash||0;
         if(form.agentId) defaultAgents[t.terminalId]=form.agentId;
+        defaultNotes[t.terminalId]='';
       });
       setCashOverrides(defaultCash);
       setAgentOverrides(defaultAgents);
+      setNoteOverrides(defaultNotes);
     }catch(e){
       setMsg(e.message);
     }finally{
@@ -90,6 +95,7 @@ export default function AreaDispatch({done}){
         terminalIds:selected,
         cashOverrides,
         agentOverrides,
+        noteOverrides,
         localDate
       })});
       setMsg(`${result.assigned} ATMs assigned across ${selectedAreas.length} area(s). Total cash: $${result.totalCash.toLocaleString()}. ${result.skippedLocked} locked ATM(s) skipped.`);
@@ -202,6 +208,7 @@ export default function AreaDispatch({done}){
             <div>
               <b>{t.terminalId} · {t.current?.businessName||t.official?.name} {isInactive&&<span style={{color:'#a63e36',fontSize:11,fontWeight:800,marginLeft:6}}>(INACTIVE)</span>}</b>
               <span>{t.current?.address||t.official?.address} · {t.current?.city||t.official?.city} &nbsp; <span style={{background:'#edf2f0',padding:'1px 6px',borderRadius:8,fontWeight:700,fontSize:10,color:'#357064'}}>{t.official?.locationArea}</span></span>
+              <span style={{marginTop:2}}>Last Withdrawal: <strong style={{color:'#183d36'}}>{fmt(t.official?.lastWithdrawalAt)}</strong></span>
             </div>
             <section>
               <small>WISH / BALANCE</small>
@@ -213,14 +220,28 @@ export default function AreaDispatch({done}){
             </section>
 
             {isInactive ? (
-              <strong style={{color:'#a63e36', gridColumn: 'span 2', textAlign: 'right'}}>Inactive — Activate first</strong>
+              <strong style={{color:'#a63e36', gridColumn: 'span 3', textAlign: 'right'}}>Inactive — Activate first</strong>
             ) : t.activeJob ? (
-              <div style={{gridColumn: 'span 2', textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
+              <div style={{gridColumn: 'span 3', textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
                 <strong style={{color:'#999'}}>Assigned: {t.activeJob.agent?.name}</strong>
                 {t.activeJob.dueAt && <small style={{color:'#a5b0aa', fontSize: '10px', marginTop: '2px'}}>Due: {new Date(t.activeJob.dueAt).toLocaleDateString('en-CA')}</small>}
               </div>
             ) : (
               <>
+                <div className="agent-select-wrap">
+                  <small className="agent-select-label">COMMENT (OPTIONAL)</small>
+                  <input
+                    type="text"
+                    placeholder="Note for agent..."
+                    value={noteOverrides[t.terminalId]||''}
+                    onChange={e=>setNoteOverrides(prev=>({...prev,[t.terminalId]:e.target.value}))}
+                    disabled={!isSelected}
+                    onClick={e=>e.stopPropagation()}
+                    style={{width:'100%',padding:'6px 10px',borderRadius:'16px',border:'1.5px solid #d0dad5',fontSize:12,outline:'none',background:!isSelected?'#f1f5f3':'#f8faf9',transition:'all 0.2s',color:'#173e36'}}
+                    onFocus={e=>e.target.style.borderColor='#183d36'}
+                    onBlur={e=>e.target.style.borderColor='#d0dad5'}
+                  />
+                </div>
                 <div className="agent-select-wrap">
                   <small className="agent-select-label">ASSIGNED AGENT</small>
                   <div className={`agent-pill-box ${assignedAgent ? 'has-agent' : ''} ${!isSelected ? 'disabled' : ''}`}>

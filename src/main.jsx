@@ -14,6 +14,7 @@ import Notifications from './Notifications.jsx';
 import CashLedger from './CashLedger.jsx';
 import Discrepancies from './Discrepancies.jsx';
 import SystemLogs from './SystemLogs.jsx';
+import Tickets from './Tickets.jsx';
 import'./style.css';
 import'./terminal.css';
 import'./history.css';
@@ -66,11 +67,14 @@ function Shell(){
   const admin=user.role==='admin', agent=user.role==='agent';
 
   const links=agent
-    ?[['jobs','Daily agent load','▣','/jobs'],
+    ?[['terminals','Terminals','▦','/terminals'],
+      ['tickets','Generate Ticket','🎫','/tickets'],
+      ['jobs','Daily agent load','▣','/jobs'],
       ['routesheet','Daily route','🖨','/routesheet']]
     :[['dashboard','Overview','⌂','/dashboard'],
       ['notifications','Notifications','●','/notifications'],
       ['terminals','Terminals','▦','/terminals'],
+      ['tickets','Generate Ticket','🎫','/tickets'],
       ['assign','ATM setup & location','⌖','/assign'],
       ['dispatch','Single ATM dispatch','↗','/dispatch'],
       ['area','Area route dispatch','⌘','/area'],
@@ -89,6 +93,7 @@ function Shell(){
     dashboard:'Command center',
     notifications:'Notifications & setup queue',
     terminals:'Terminal registry',
+    tickets:'Generate & view tickets',
     assign:'ATM setup & current location',
     dispatch:'Single ATM dispatch',
     area:'Location area route dispatch',
@@ -107,6 +112,7 @@ function Shell(){
       dashboard:'/dashboard',
       notifications:'/notifications',
       terminals:'/terminals',
+      tickets:'/tickets',
       assign:'/assign',
       dispatch:'/dispatch',
       area:'/area',
@@ -151,6 +157,7 @@ function Shell(){
         <Route path="/history" element={admin?<AssignmentHistory/>:<Navigate to="/jobs" replace/>} />
         <Route path="/logs" element={admin?<SystemLogs/>:<Navigate to="/jobs" replace/>} />
         <Route path="/import" element={<OfficialImport/>} />
+        <Route path="/tickets" element={<Tickets/>} />
         <Route path="*" element={<Navigate to={agent ? '/jobs' : '/dashboard'} replace />} />
       </Routes>
     </section>

@@ -19,6 +19,9 @@ const show = v => (v === 0 ? 0 : v || '—');
 const fmt  = v => v ? new Date(v).toLocaleDateString('en-CA') : '—';
 
 export default function TerminalRegistry() {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAgent = user.role === 'agent';
+
   const [q,        setQ]        = useState('');
   const [data,     setData]     = useState({ items: [] });
   const [error,    setError]    = useState('');
@@ -101,6 +104,7 @@ export default function TerminalRegistry() {
                       className={`status-select ${t.official?.status?.toLowerCase()}`}
                       value={t.official?.status === 'Inactive' ? 'Inactive' : 'Active'}
                       onChange={e => updateStatus(t, e.target.value)}
+                      disabled={isAgent}
                     >
                       <option>Active</option>
                       <option>Inactive</option>
@@ -187,6 +191,7 @@ export default function TerminalRegistry() {
           t={selected}
           onClose={() => setSelected(null)}
           onStatusChange={updateStatus}
+          isAgent={isAgent}
         />
       )}
     </>
@@ -194,7 +199,7 @@ export default function TerminalRegistry() {
 }
 
 /* ── Terminal Detail Modal ────────────────────────────────────────────────── */
-function TerminalModal({ t, onClose, onStatusChange }) {
+function TerminalModal({ t, onClose, onStatusChange, isAgent }) {
   const currentBiz     = t.current?.businessName || t.official?.tempName || t.original?.businessName;
   const currentAddress = t.current?.address      || t.original?.address  || t.official?.address;
   const currentCity    = t.current?.city         || t.original?.city     || t.official?.city;
@@ -256,6 +261,7 @@ function TerminalModal({ t, onClose, onStatusChange }) {
               className={`status-select ${t.official?.status?.toLowerCase()}`}
               value={isActive ? 'Active' : 'Inactive'}
               onChange={e => onStatusChange(t, e.target.value)}
+              disabled={isAgent}
             >
               <option>Active</option>
               <option>Inactive</option>
