@@ -25,7 +25,8 @@ const ALL_TABS = [
   { id: 'discrepancies', label: 'Cash Discrepancies' },
   { id: 'history', label: 'ATM Movement History' },
   { id: 'logs', label: 'Activity & Audit Logs' },
-  { id: 'import', label: 'Official Import' }
+  { id: 'import', label: 'Official Import' },
+  { id: 'atm', label: 'ATM Forms' }
 ];
 
 export default function AgentManagement(){

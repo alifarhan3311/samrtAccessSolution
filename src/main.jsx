@@ -15,6 +15,7 @@ import CashLedger from './CashLedger.jsx';
 import Discrepancies from './Discrepancies.jsx';
 import SystemLogs from './SystemLogs.jsx';
 import Tickets from './Tickets.jsx';
+import AtmForms from './AtmForms.jsx';
 import'./style.css';
 import'./terminal.css';
 import'./history.css';
@@ -82,7 +83,8 @@ function Shell(){
     ['discrepancies','Cash discrepancies','⚠','/discrepancies'],
     ['history','ATM movement history','◷','/history'],
     ['logs','Activity & Audit Logs','📋','/logs'],
-    ['import','Official import','⇅','/import']
+    ['import','Official import','⇅','/import'],
+    ['atm','ATM Forms','📝','/atm']
   ];
 
   let links = [];
@@ -111,7 +113,8 @@ function Shell(){
     history:'ATM movement history',
     discrepancies:'Cash discrepancies & alerts',
     logs:'System Activity & Audit Logs',
-    import:'Official data import'
+    import:'Official data import',
+    atm:'ATM Forms'
   };
 
   const go=(targetKey)=>{
@@ -130,7 +133,8 @@ function Shell(){
       discrepancies:'/discrepancies',
       history:'/history',
       logs:'/logs',
-      import:'/import'
+      import:'/import',
+      atm:'/atm'
     };
     navigate(pathMap[targetKey]||(targetKey.startsWith('/')?targetKey:`/${targetKey}`));
   };
@@ -165,6 +169,7 @@ function Shell(){
         <Route path="/logs" element={can('logs')?<SystemLogs/>:<Navigate to="/jobs" replace/>} />
         <Route path="/import" element={can('import')?<OfficialImport/>:<Navigate to="/jobs" replace/>} />
         <Route path="/tickets" element={<Tickets/>} />
+        <Route path="/atm" element={can('atm')?<AtmForms/>:<Navigate to="/jobs" replace/>} />
         <Route path="*" element={<Navigate to={agent ? '/jobs' : '/dashboard'} replace />} />
       </Routes>
     </section>
