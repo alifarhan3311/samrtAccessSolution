@@ -65,29 +65,36 @@ function Shell(){
   if(!user)return <Login done={u=>{setUser(u);navigate(u.role==='agent'?'/jobs':'/dashboard')}}/>;
   const logout=()=>{localStorage.clear();setUser(null)};
   const admin=user.role==='admin', agent=user.role==='agent';
+  const can=(tab)=>admin||(user.allowedTabs||[]).includes(tab);
 
-  const links=agent
-    ?[['terminals','Terminals','▦','/terminals'],
-      ['tickets','Generate Ticket','🎫','/tickets'],
-      ['jobs','Daily agent load','▣','/jobs'],
-      ['routesheet','Daily route','🖨','/routesheet']]
-    :[['dashboard','Overview','⌂','/dashboard'],
-      ['notifications','Notifications','●','/notifications'],
-      ['terminals','Terminals','▦','/terminals'],
-      ['tickets','Generate Ticket','🎫','/tickets'],
-      ['assign','ATM setup & location','⌖','/assign'],
-      ['dispatch','Single ATM dispatch','↗','/dispatch'],
-      ['area','Area route dispatch','⌘','/area'],
-      ['jobs','Daily agent load','▣','/jobs'],
-      ['routesheet','Daily route','🖨','/routesheet'],
-      ...(admin?[
-        ['agents','Manage agents','☺','/agents'],
-        ['ledger','Cash ledger','$','/ledger'],
-        ['discrepancies','Cash discrepancies','⚠','/discrepancies'],
-        ['history','ATM movement history','◷','/history'],
-        ['logs','Activity & Audit Logs','📋','/logs']
-      ]:[]),
-      ['import','Official import','⇅','/import']];
+  const allPossibleLinks = [
+    ['dashboard','Overview','⌂','/dashboard'],
+    ['notifications','Notifications','●','/notifications'],
+    ['terminals','Terminals','▦','/terminals'],
+    ['tickets','Generate Ticket','🎫','/tickets'],
+    ['assign','ATM setup & location','⌖','/assign'],
+    ['dispatch','Single ATM dispatch','↗','/dispatch'],
+    ['area','Area route dispatch','⌘','/area'],
+    ['jobs','Daily agent load','▣','/jobs'],
+    ['routesheet','Daily route','🖨','/routesheet'],
+    ['agents','Manage agents','☺','/agents'],
+    ['ledger','Cash ledger','$','/ledger'],
+    ['discrepancies','Cash discrepancies','⚠','/discrepancies'],
+    ['history','ATM movement history','◷','/history'],
+    ['logs','Activity & Audit Logs','📋','/logs'],
+    ['import','Official import','⇅','/import']
+  ];
+
+  let links = [];
+  if (agent) {
+    const agentTabs = user.allowedTabs || ['terminals', 'tickets', 'jobs', 'routesheet'];
+    links = allPossibleLinks.filter(l => agentTabs.includes(l[0]));
+  } else {
+    links = allPossibleLinks.filter(l => {
+      if (['agents','ledger','discrepancies','history','logs'].includes(l[0])) return admin;
+      return true;
+    });
+  }
 
   const titles={
     dashboard:'Command center',
@@ -151,12 +158,12 @@ function Shell(){
         <Route path="/area" element={<AreaDispatch done={()=>go('jobs')}/>} />
         <Route path="/jobs" element={<AgentJobs role={user.role}/>} />
         <Route path="/routesheet" element={<RouteSheet/>} />
-        <Route path="/agents" element={admin?<AgentManagement/>:<Navigate to="/jobs" replace/>} />
-        <Route path="/ledger" element={admin?<CashLedger/>:<Navigate to="/jobs" replace/>} />
-        <Route path="/discrepancies" element={admin?<Discrepancies/>:<Navigate to="/jobs" replace/>} />
-        <Route path="/history" element={admin?<AssignmentHistory/>:<Navigate to="/jobs" replace/>} />
-        <Route path="/logs" element={admin?<SystemLogs/>:<Navigate to="/jobs" replace/>} />
-        <Route path="/import" element={<OfficialImport/>} />
+        <Route path="/agents" element={can('agents')?<AgentManagement/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/ledger" element={can('ledger')?<CashLedger/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/discrepancies" element={can('discrepancies')?<Discrepancies/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/history" element={can('history')?<AssignmentHistory/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/logs" element={can('logs')?<SystemLogs/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/import" element={can('import')?<OfficialImport/>:<Navigate to="/jobs" replace/>} />
         <Route path="/tickets" element={<Tickets/>} />
         <Route path="*" element={<Navigate to={agent ? '/jobs' : '/dashboard'} replace />} />
       </Routes>

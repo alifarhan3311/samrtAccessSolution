@@ -12,9 +12,11 @@ async function auth(req, res, next) {
     req.user = user; next();
   } catch { res.status(401).json({ message: 'Invalid or expired session' }); }
 }
-const permit = (...roles) => (req, res, next) => {
+const permit = (...rolesOrTabs) => (req, res, next) => {
   const effectiveRole = req.user.role === 'user' ? 'manager' : req.user.role;
-  return roles.includes(req.user.role) || roles.includes(effectiveRole) ? next() : res.status(403).json({ message: 'Insufficient permission' });
+  if (rolesOrTabs.includes(req.user.role) || rolesOrTabs.includes(effectiveRole)) return next();
+  if (rolesOrTabs.some(t => req.user.allowedTabs?.includes(t))) return next();
+  return res.status(403).json({ message: 'Insufficient permission' });
 };
 const audit = async (req, action, entity, entityId, metadata = {}) => Audit.create({ actor: req.user?._id, action, entity, entityId, metadata, ip: req.ip });
 module.exports = { sign, auth, permit, audit };

@@ -8,7 +8,25 @@ async function api(path,options={}){
   return d;
 }
 
-const EMPTY_FORM={name:'',email:'',phoneNumber:'',password:''};
+const EMPTY_FORM={name:'',email:'',phoneNumber:'',password:'',allowedTabs:['terminals','tickets','jobs','routesheet']};
+
+const ALL_TABS = [
+  { id: 'dashboard', label: 'Command Center (Dashboard)' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'terminals', label: 'Terminal Registry' },
+  { id: 'tickets', label: 'Generate Ticket' },
+  { id: 'assign', label: 'ATM Setup & Location' },
+  { id: 'dispatch', label: 'Single ATM Dispatch' },
+  { id: 'area', label: 'Area Route Dispatch' },
+  { id: 'jobs', label: 'Daily Agent Load' },
+  { id: 'routesheet', label: 'Daily Route Sheet' },
+  { id: 'agents', label: 'Agent Management' },
+  { id: 'ledger', label: 'Cash Ledger' },
+  { id: 'discrepancies', label: 'Cash Discrepancies' },
+  { id: 'history', label: 'ATM Movement History' },
+  { id: 'logs', label: 'Activity & Audit Logs' },
+  { id: 'import', label: 'Official Import' }
+];
 
 export default function AgentManagement(){
   const[agents,setAgents]=useState([]);
@@ -34,7 +52,7 @@ export default function AgentManagement(){
 
   function startEdit(agent){
     setEditing(agent);
-    setForm({name:agent.name,email:agent.email,phoneNumber:agent.phoneNumber||'',password:''});
+    setForm({name:agent.name,email:agent.email,phoneNumber:agent.phoneNumber||'',password:'',allowedTabs:agent.allowedTabs||['terminals','tickets','jobs','routesheet']});
     setPicture(null);setPreview(null);setMsg('');
   }
   function cancelEdit(){setEditing(null);setForm(EMPTY_FORM);setPicture(null);setPreview(null);setMsg('');}
@@ -47,12 +65,25 @@ export default function AgentManagement(){
     setSaving(true);setMsg('');
     const body=new FormData();
     if(!editing){
-      Object.entries(form).forEach(([k,v])=>body.append(k,v));
+      Object.entries(form).forEach(([k,v])=>{
+        if(k==='allowedTabs'){
+          if(v.length===0) body.append('allowedTabs','');
+          else v.forEach(t=>body.append('allowedTabs',t));
+        }else{
+          body.append(k,v);
+        }
+      });
       body.append('picture',picture);
     }else{
       if(form.name!==editing.name)body.append('name',form.name);
       if(form.email!==editing.email)body.append('email',form.email);
       if(form.phoneNumber!==editing.phoneNumber)body.append('phoneNumber',form.phoneNumber);
+      const currentTabs = editing.allowedTabs || ['terminals','tickets','jobs','routesheet'];
+      const tabsChanged = form.allowedTabs.join(',') !== currentTabs.join(',');
+      if(tabsChanged){
+        if(form.allowedTabs.length===0) body.append('allowedTabs','');
+        else form.allowedTabs.forEach(t=>body.append('allowedTabs',t));
+      }
       if(picture)body.append('picture',picture);
     }
     try{
@@ -111,6 +142,21 @@ export default function AgentManagement(){
           <label>Email Address<input type="email" required value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label>
           <label>Phone Number<input type="tel" required={isCreate} minLength="7" placeholder="+1 416 555 0100" value={form.phoneNumber} onChange={e=>setForm({...form,phoneNumber:e.target.value})}/></label>
           {isCreate&&<label>Password<input type="password" required minLength="8" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label>}
+        </div>
+        <div className="tab-access-section" style={{marginTop:'1.5rem',paddingTop:'1.5rem',borderTop:'1px solid var(--border)'}}>
+          <h4 style={{marginBottom:'0.2rem'}}>Tab Access Permissions</h4>
+          <p className="muted" style={{marginBottom:'1rem',fontSize:'0.85rem'}}>Select which tabs this agent is allowed to view and interact with.</p>
+          <div className="checkbox-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:'0.75rem',marginBottom:'1.5rem'}}>
+            {ALL_TABS.map(tab=>(
+              <label key={tab.id} style={{display:'flex',alignItems:'center',gap:'0.5rem',cursor:'pointer',fontSize:'0.9rem',background:'var(--surface-hover)',padding:'0.5rem',borderRadius:'0.4rem'}}>
+                <input type="checkbox" checked={form.allowedTabs.includes(tab.id)} onChange={e=>{
+                  const checked=e.target.checked;
+                  setForm(f=>({...f,allowedTabs:checked?[...f.allowedTabs,tab.id]:f.allowedTabs.filter(x=>x!==tab.id)}));
+                }}/>
+                <span>{tab.label}</span>
+              </label>
+            ))}
+          </div>
         </div>
         {msg&&<p className={msg.includes('success')?'success':'error'}>{msg}</p>}
         <div style={{display:'flex',gap:10}}>

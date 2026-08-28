@@ -38,6 +38,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true }, email: { type: String, required: true, unique: true, lowercase: true },
   phoneNumber: { type: String, trim: true }, profilePicture: { storedName: String, mimeType: String, originalName: String, size: Number, url: String },
   passwordHash: { type: String, required: true }, role: { type: String, enum: ['admin', 'user', 'agent'], default: 'user' },
+  allowedTabs: { type: [String], default: ['terminals', 'tickets', 'jobs', 'routesheet'] },
   active: { type: Boolean, default: true }, lastLoginAt: Date
 }, { timestamps: true });
 
