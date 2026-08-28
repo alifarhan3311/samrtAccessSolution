@@ -456,14 +456,29 @@ app.post('/api/atm/installation', auth, permit('admin', 'agent', 'atm'), async (
 
 app.get('/api/atm/installation/:terminalId', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
   try {
-    const form = await AtmInstallation.findOne({ terminalId: req.params.terminalId }).sort({ createdAt: -1 });
-    if (!form) return res.status(404).json({ message: 'No installation form found for this Terminal ID' });
-    res.json(form);
+    const termId = req.params.terminalId.toUpperCase().trim();
+    const form = await AtmInstallation.findOne({ terminalId: termId }).sort({ createdAt: -1 });
+    if (form) {
+      return res.json(form);
+    }
+    
+    // If no form exists, see if the Terminal exists to pre-fill the form
+    const terminal = await Terminal.findOne({ terminalId: termId });
+    if (terminal) {
+      return res.json({
+        terminalId: termId,
+        locationName: terminal.current?.businessName || terminal.official?.name || '',
+        locationStreet: terminal.current?.address || terminal.official?.address || '',
+        locationCity: terminal.current?.city || terminal.official?.city || ''
+      });
+    }
+
+    res.status(404).json({ message: 'No installation form or terminal found for this ID' });
   } catch(e) { next(e); }
 });
 
 app.use((err,req,res,next)=>{console.error(err);if(err.name==='ZodError')return res.status(400).json({message:'Validation failed',issues:err.issues});res.status(500).json({message:'An unexpected error occurred',...(process.env.NODE_ENV!=='production'?{detail:err.message}:{})});});
-async function start(){await mongoose.connect(process.env.MONGODB_URI);const email=process.env.ADMIN_EMAIL?.toLowerCase();if(email&&!await User.exists({email}))await User.create({name:'Administrator',email,passwordHash:await bcrypt.hash(process.env.ADMIN_PASSWORD,12),role:'admin'});app.listen(process.env.PORT||4000,()=>console.log(`API ready on ${process.env.PORT||4000}`));} if(require.main===module)start().catch(e=>{console.error(e);process.exit(1)});
+async function start(){await mongoose.connect(process.env.MONGODB_URI);const email=process.env.ADMIN_EMAIL?.toLowerCase();if(email&&!await User.exists({email}))await User.create({name:'Administrator',email,passwordHash:await bcrypt.hash(process.env.ADMIN_PASSWORD,12),role:'admin'});app.listen(process.env.PORT||4000,'localhost',()=>console.log(`API ready on ${process.env.PORT||4000}`));} if(require.main===module)start().catch(e=>{console.error(e);process.exit(1)});
 
 // Vercel serverless handler
 async function connectDB() {

@@ -374,21 +374,7 @@
   max-width: 400px;
 }
 
-/* ── Print Styles ── */
-@media print {
-  body * { visibility: hidden; }
-  .print-area, .print-area * { visibility: visible; }
-  .print-area { position: absolute; left: 0; top: 0; width: 100%; }
-  .no-print, .atm-top-bar, .atm-notify, .atm-forms-nav { display: none !important; }
-  .sheet-section-title {
-    background: #163b34 !important;
-    color: #d5ff55 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  .sheet-title { background: #f1f3ef !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .form-label { background: #f9faf8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-}
+
 
 @media (max-width: 700px) {
   .atm-top-bar { flex-direction: column; align-items: stretch; }
