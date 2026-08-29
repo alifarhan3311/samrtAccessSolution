@@ -220,7 +220,28 @@ export default function Tickets() {
                             <strong>Note:</strong> {t.resolutionNote}
                           </div>
                         )}
-                        {t.assignedTo && (
+                        {isAdmin ? (
+                          <div style={{ marginTop: '6px' }}>
+                            <select 
+                              style={{ fontSize: '12px', padding: '2px 4px', borderRadius: '4px', border: '1px solid #ccc' }}
+                              value={t.assignedTo?._id || ''}
+                              onChange={async (e) => {
+                                try {
+                                  await req(`/tickets/${t._id}`, {
+                                    method: 'PATCH',
+                                    body: JSON.stringify({ assignedTo: e.target.value })
+                                  });
+                                  setTickets(prev => prev.map(tick => tick._id === t._id ? { ...tick, assignedTo: agents.find(a => a._id === e.target.value) || null } : tick));
+                                } catch(err) { alert(err.message); }
+                              }}
+                            >
+                              <option value="">-- Unassigned --</option>
+                              {agents.map(a => (
+                                <option key={a._id} value={a._id}>{a.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : t.assignedTo && (
                           <div style={{ marginTop: '4px', fontSize: '12px', color: '#357064', fontWeight: 'bold' }}>
                             Assigned To: {t.assignedTo.name}
                           </div>

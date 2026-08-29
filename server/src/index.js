@@ -233,7 +233,7 @@ app.get('/api/logs',auth,permit('admin','manager','logs'),async(req,res,next)=>{
     const meta=a.metadata||{};
     let cat='general';
     if(['DAILY_AGENT_DISPATCHED','AREA_ROUTE_DISPATCHED','TERMINAL_ASSIGNED'].includes(a.action))cat='dispatch';
-    else if(['AGENT_JOB_UPDATED','AGENT_JOB_APPROVED'].includes(a.action))cat='tasks';
+    else if(['AGENT_JOB_UPDATED','AGENT_JOB_APPROVED','TICKET_CREATED','TICKET_UPDATED'].includes(a.action))cat='tasks';
     else if(['TERMINAL_STATUS_CHANGED'].includes(a.action))cat='terminals';
     else if(['AGENT_CREATED','AGENT_UPDATED','AGENT_DEACTIVATED','AGENT_REACTIVATED','AGENT_PASSWORD_RESET'].includes(a.action))cat='agents';
     else if(['CASH_WITHDRAWN','CASH_RETURNED','DISCREPANCY_RESOLVED'].includes(a.action))cat='ledger';
@@ -438,7 +438,13 @@ app.post('/api/tickets', auth, async(req, res, next) => {
     await ticket.populate('generatedBy', 'name email');
     if (ticket.assignedTo) await ticket.populate('assignedTo', 'name email');
     
-    await audit(req, 'TICKET_CREATED', 'Ticket', ticket.id, { terminalId: t.terminalId, problem: b.problem, assignedTo: b.assignedTo });
+    await audit(req, 'TICKET_CREATED', 'Ticket', ticket.id, { 
+      terminalId: t.terminalId, 
+      problem: b.problem, 
+      agentId: ticket.assignedTo?._id,
+      agentName: ticket.assignedTo?.name,
+      agentEmail: ticket.assignedTo?.email
+    });
     res.status(201).json(ticket);
   } catch(e) { next(e); }
 });
@@ -480,7 +486,12 @@ app.patch('/api/tickets/:id', auth, async(req, res, next) => {
     await ticket.populate('generatedBy', 'name email');
     if (ticket.assignedTo) await ticket.populate('assignedTo', 'name email');
     
-    await audit(req, 'TICKET_UPDATED', 'Ticket', ticket.id, { status: b.status, assignedTo: b.assignedTo });
+    await audit(req, 'TICKET_UPDATED', 'Ticket', ticket.id, { 
+      status: b.status, 
+      agentId: ticket.assignedTo?._id,
+      agentName: ticket.assignedTo?.name,
+      agentEmail: ticket.assignedTo?.email
+    });
     res.json(ticket);
   } catch(e) { next(e); }
 });
