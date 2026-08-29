@@ -1,6 +1,8 @@
 import React,{useEffect,useState}from'react';
 import{createRoot}from'react-dom/client';
 import{BrowserRouter,Routes,Route,useNavigate,useLocation,Navigate}from'react-router-dom';
+import { io } from 'socket.io-client';
+import { Toaster, toast } from 'react-hot-toast';
 import TerminalRegistry from './TerminalRegistry.jsx';
 import AssignmentHistory from './AssignmentHistory.jsx';
 import AssignTerminal from './AssignTerminal.jsx';
@@ -69,6 +71,17 @@ function Shell(){
   const navigate=useNavigate();
   const location=useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const socket = io('/', { auth: { token: localStorage.getItem('token') } });
+    socket.on('terminal_alert', (data) => {
+      if (data.type === 'error') toast.error(data.message, { duration: 8000 });
+      else if (data.type === 'warning') toast(data.message, { icon: '⚠️', duration: 6000 });
+      else toast.success(data.message);
+    });
+    return () => socket.disconnect();
+  }, [user]);
 
   if(!user)return <Login done={u=>{setUser(u);navigate(u.role==='agent'?'/jobs':'/dashboard')}}/>;
   const logout=()=>{localStorage.clear();setUser(null)};
@@ -143,6 +156,7 @@ function Shell(){
   const currentPath=location.pathname.replace(/^\//,'')||(agent?'jobs':'dashboard');
 
   return <div className="shell">
+    <Toaster position="top-right" />
     <aside className={mobileMenuOpen ? 'open' : ''}>
       <div className="logo"><div className="mark">S</div><div><b>Smart Access</b><small>COMMAND CENTER</small></div></div>
       <nav>{links.map(x=><button key={x[0]} className={location.pathname===x[3]||(x[0]==='dashboard'&&location.pathname==='/')?'active':''} onClick={()=>{navigate(x[3]);setMobileMenuOpen(false);}}><i>{x[2]}</i>{x[1]}</button>)}</nav>

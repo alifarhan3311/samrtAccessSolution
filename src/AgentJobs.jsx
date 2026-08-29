@@ -96,7 +96,6 @@ export default function AgentJobs({ role }) {
   const [selected,setSelected]= useState(null); // job detail modal
   const [updating,setUpdating]= useState(null); // job update modal
   const [msg,     setMsg]     = useState('');
-  const [agent,   setAgent]   = useState({ name: '', email: '', password: '' });
 
   const admin = role === 'admin' || role === 'manager';
 
@@ -135,17 +134,6 @@ export default function AgentJobs({ role }) {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [status, search, agentId, fromDate, toDate, page]);
-
-  async function createAgent(e) {
-    e.preventDefault();
-    setActionLoading('createAgent');
-    try {
-      await json('/users/agents', { method: 'POST', body: JSON.stringify(agent) });
-      setMsg('Agent account created.');
-      setAgent({ name: '', email: '', password: '' });
-    } catch (e) { setMsg(e.message); }
-    setActionLoading('');
-  }
 
   async function approve(job, e) {
     e.stopPropagation();
@@ -205,23 +193,6 @@ export default function AgentJobs({ role }) {
             <button className="aj-btn-dl" onClick={() => downloadCSV(jobs)} disabled={!!actionLoading}>
               ⬇ Download CSV
             </button>
-          )}
-          {admin && (
-            <details className="aj-create-details">
-              <summary>+ Create agent</summary>
-              <form onSubmit={createAgent}>
-                <input placeholder="Agent name" required value={agent.name}
-                  onChange={e => setAgent({ ...agent, name: e.target.value })} disabled={!!actionLoading} />
-                <input type="email" placeholder="Email" required value={agent.email}
-                  onChange={e => setAgent({ ...agent, email: e.target.value })} disabled={!!actionLoading} />
-                <input type="password" placeholder="Temporary password" minLength="8" required
-                  value={agent.password}
-                  onChange={e => setAgent({ ...agent, password: e.target.value })} disabled={!!actionLoading} />
-                <button type="submit" disabled={!!actionLoading}>
-                  {actionLoading === 'createAgent' ? 'Creating...' : 'Create'}
-                </button>
-              </form>
-            </details>
           )}
         </div>
       </div>

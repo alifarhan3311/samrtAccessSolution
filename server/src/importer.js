@@ -116,7 +116,7 @@ function toOfficialSet(fields) {
   return set;
 }
 
-async function importWorkbook(buffer, fileName, userId) {
+async function importWorkbook(buffer, fileName, userId, io) {
   const book  = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const sheet = book.Sheets[book.SheetNames[0]];
   const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
@@ -223,6 +223,26 @@ async function importWorkbook(buffer, fileName, userId) {
         bulkOps.push({ updateOne: { filter: { _id: existing._id }, update: { $set: partialSet } } });
         changes.push({ terminalId, type: 'updated', format, fields: changedFields });
         totals.updated++;
+        
+        if (io && format === 'canada_status' && extracted.cashBalance !== undefined) {
+          const cashBalance = extracted.cashBalance;
+          const wishAmount = existing.official?.wishAmount || existing.alert?.threshold || 0;
+          const oldBalance = existing.official?.cashBalance;
+          
+          if (cashBalance === 0 && oldBalance !== 0) {
+            io.emit('terminal_alert', {
+              type: 'error',
+              title: 'Critical: Zero Balance',
+              message: `Terminal ${terminalId} (${existing.official?.name || 'Unknown'}) is out of cash ($0)!`
+            });
+          } else if (wishAmount > 0 && cashBalance < wishAmount && oldBalance >= wishAmount) {
+            io.emit('terminal_alert', {
+              type: 'warning',
+              title: 'Low Cash Warning',
+              message: `Terminal ${terminalId} dropped to $${cashBalance} (Wish: $${wishAmount})`
+            });
+          }
+        }
       } else {
         totals.unchanged++;
       }

@@ -31,7 +31,10 @@
         "multer": "latest",
         "react": "latest",
         "react-dom": "latest",
+        "react-hot-toast": "^2.6.0",
         "react-router-dom": "latest",
+        "socket.io": "^4.8.3",
+        "socket.io-client": "^4.8.3",
         "vite": "latest",
         "xlsx": "latest",
         "zod": "latest"

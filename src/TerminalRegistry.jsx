@@ -200,7 +200,7 @@ export default function TerminalRegistry() {
 
 /* ── Terminal Detail Modal ────────────────────────────────────────────────── */
 function TerminalModal({ t, onClose, onStatusChange, isAgent }) {
-  const currentBiz     = t.current?.businessName || t.official?.tempName || t.original?.businessName;
+  const currentBiz     = t.official?.tempName || t.current?.businessName || t.official?.name;
   const currentAddress = t.current?.address      || t.original?.address  || t.official?.address;
   const currentCity    = t.current?.city         || t.original?.city     || t.official?.city;
   const isActive       = t.official?.status !== 'Inactive';
@@ -229,11 +229,6 @@ function TerminalModal({ t, onClose, onStatusChange, isAgent }) {
             <p className="muted">{show(currentCity)}</p>
           </div>
 
-          <div className="tr-modal-section">
-            <h5>Original Installation</h5>
-            <p>{show(t.original?.businessName || t.official?.name)}</p>
-            <p className="muted">{show(t.official?.address)}</p>
-          </div>
 
           <div className="tr-modal-rows">
             {[
