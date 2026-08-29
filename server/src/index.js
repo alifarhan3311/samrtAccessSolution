@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express'); const mongoose = require('mongoose'); const bcrypt = require('bcryptjs'); const crypto = require('crypto');
 const helmet = require('helmet'); const cors = require('cors'); const compression = require('compression'); const rateLimit = require('express-rate-limit'); const mongoSanitize = require('express-mongo-sanitize'); const multer = require('multer'); const { z } = require('zod');
-const { Terminal, User, Audit, ImportRun, AgentJob, CashWithdrawal, CashReturn, CashDiscrepancy, Ticket, AtmInstallation } = require('./models'); const { sign, auth, permit, audit } = require('./security'); const { importWorkbook } = require('./importer'); const { uploadBuffer, deleteFile } = require('./cloudinary');
+const { Terminal, User, Audit, ImportRun, AgentJob, CashWithdrawal, CashReturn, CashDiscrepancy, Ticket, AtmInstallation, AtmAgreement, AtmRemoval, AtmSetup } = require('./models'); const { sign, auth, permit, audit } = require('./security'); const { importWorkbook } = require('./importer'); const { uploadBuffer, deleteFile } = require('./cloudinary');
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) { console.error('JWT_SECRET must contain at least 32 characters'); if (require.main === module) process.exit(1); }
 const app = express(); app.set('trust proxy', 1); app.use(helmet()); app.use(compression()); app.use(cors({ origin: process.env.CLIENT_ORIGIN?.split(',') || false })); app.use(express.json({ limit: '1mb' })); app.use(mongoSanitize());
 app.use('/api/auth', rateLimit({ windowMs: 15*60*1000, limit: 20, standardHeaders: true, legacyHeaders: false }));
@@ -413,9 +413,77 @@ app.get('/api/logs',auth,permit('admin','manager','logs'),async(req,res,next)=>{
 }catch(e){next(e)}});
 app.get('/api/assignment-history',auth,permit('admin','history'),async(req,res,next)=>{try{const escape=s=>String(s||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const match={};if(req.query.search){const rx=new RegExp(escape(req.query.search),'i');match.$or=[{terminalId:rx},{'assignmentHistory.businessName':rx},{'assignmentHistory.address':rx},{'assignmentHistory.city':rx}];}if(req.query.city)match['assignmentHistory.city']=new RegExp(`^${escape(req.query.city)}$`,'i');if(req.query.from||req.query.to){match['assignmentHistory.assignedAt']={};if(req.query.from)match['assignmentHistory.assignedAt'].$gte=new Date(`${req.query.from}T00:00:00`);if(req.query.to)match['assignmentHistory.assignedAt'].$lte=new Date(`${req.query.to}T23:59:59.999`);}const limit=Math.min(5000,Math.max(1,+req.query.limit||500));const pipeline=[{$unwind:'$assignmentHistory'},{$match:match},{$lookup:{from:'users',localField:'assignmentHistory.assignedBy',foreignField:'_id',as:'assignedUser'}},{$unwind:{path:'$assignedUser',preserveNullAndEmptyArrays:true}},{$project:{_id:0,terminalId:1,originalBusiness:'$original.businessName',originalAddress:'$original.address',businessName:'$assignmentHistory.businessName',address:'$assignmentHistory.address',city:'$assignmentHistory.city',paymentAmount:'$assignmentHistory.paymentAmount',assignedAt:'$assignmentHistory.assignedAt',endedAt:'$assignmentHistory.endedAt',note:'$assignmentHistory.note',assignedBy:'$assignedUser.name',assignedByEmail:'$assignedUser.email'}},{$sort:{assignedAt:-1}},{$limit:limit}];const items=await Terminal.aggregate(pipeline);res.json({items,total:items.length,limited:items.length===limit});}catch(e){next(e)}});
 // ── Tickets ─────────────────────────────────────────────────────────────────
-app.post('/api/tickets', auth, async(req,res,next)=>{try{const b=z.object({terminalId:z.string().min(2),problem:z.string().min(3).max(2000)}).parse(req.body);const t=await Terminal.findOne({terminalId:b.terminalId.toUpperCase()});if(!t)return res.status(404).json({message:'Terminal not found'});const ticket=await Ticket.create({terminalId:t.terminalId,problem:b.problem,generatedBy:req.user._id});await ticket.populate('generatedBy','name email');await audit(req,'TICKET_CREATED','Ticket',ticket.id,{terminalId:t.terminalId,problem:b.problem});res.status(201).json(ticket);}catch(e){next(e)}});
-app.get('/api/tickets', auth, async(req,res,next)=>{try{const page=Math.max(1,+req.query.page||1),limit=Math.min(100,Math.max(1,+req.query.limit||25));const q={};if(req.query.status)q.status=req.query.status;if(req.query.terminalId)q.terminalId=new RegExp(String(req.query.terminalId).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');const[items,total]=await Promise.all([Ticket.find(q).sort({createdAt:-1}).skip((page-1)*limit).limit(limit).populate('generatedBy','name email'),Ticket.countDocuments(q)]);res.json({items,total,page,pages:Math.ceil(total/limit)});}catch(e){next(e)}});
-app.patch('/api/tickets/:id', auth, async(req,res,next)=>{try{const b=z.object({status:z.enum(['Open','In Progress','Resolved','Closed']).optional(),resolutionNote:z.string().max(2000).optional()}).parse(req.body);const ticket=await Ticket.findById(req.params.id);if(!ticket)return res.status(404).json({message:'Ticket not found'});if(b.status)ticket.status=b.status;if(b.resolutionNote!==undefined)ticket.resolutionNote=b.resolutionNote;await ticket.save();await ticket.populate('generatedBy','name email');await audit(req,'TICKET_UPDATED','Ticket',ticket.id,{status:b.status});res.json(ticket);}catch(e){next(e)}});
+app.post('/api/tickets', auth, async(req, res, next) => {
+  try {
+    const b = z.object({
+      terminalId: z.string().min(2),
+      problem: z.string().min(3).max(2000),
+      assignedTo: z.string().optional()
+    }).parse(req.body);
+    
+    const t = await Terminal.findOne({terminalId: b.terminalId.toUpperCase()});
+    if(!t) return res.status(404).json({message: 'Terminal not found'});
+    
+    const payload = {
+      terminalId: t.terminalId,
+      problem: b.problem,
+      generatedBy: req.user._id
+    };
+    
+    if (b.assignedTo && req.user.role === 'admin') {
+      payload.assignedTo = b.assignedTo;
+    }
+    
+    const ticket = await Ticket.create(payload);
+    await ticket.populate('generatedBy', 'name email');
+    if (ticket.assignedTo) await ticket.populate('assignedTo', 'name email');
+    
+    await audit(req, 'TICKET_CREATED', 'Ticket', ticket.id, { terminalId: t.terminalId, problem: b.problem, assignedTo: b.assignedTo });
+    res.status(201).json(ticket);
+  } catch(e) { next(e); }
+});
+
+app.get('/api/tickets', auth, async(req, res, next) => {
+  try {
+    const page = Math.max(1, +req.query.page || 1);
+    const limit = Math.min(100, Math.max(1, +req.query.limit || 25));
+    const q = {};
+    if(req.query.status) q.status = req.query.status;
+    if(req.query.terminalId) q.terminalId = new RegExp(String(req.query.terminalId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    
+    const [items, total] = await Promise.all([
+      Ticket.find(q).sort({createdAt:-1}).skip((page-1)*limit).limit(limit)
+        .populate('generatedBy', 'name email')
+        .populate('assignedTo', 'name email'),
+      Ticket.countDocuments(q)
+    ]);
+    res.json({items, total, page, pages: Math.ceil(total/limit)});
+  } catch(e) { next(e); }
+});
+
+app.patch('/api/tickets/:id', auth, async(req, res, next) => {
+  try {
+    const b = z.object({
+      status: z.enum(['Open','In Progress','Resolved','Closed']).optional(),
+      resolutionNote: z.string().max(2000).optional(),
+      assignedTo: z.string().optional()
+    }).parse(req.body);
+    
+    const ticket = await Ticket.findById(req.params.id);
+    if(!ticket) return res.status(404).json({message: 'Ticket not found'});
+    
+    if(b.status) ticket.status = b.status;
+    if(b.resolutionNote !== undefined) ticket.resolutionNote = b.resolutionNote;
+    if(b.assignedTo && req.user.role === 'admin') ticket.assignedTo = b.assignedTo;
+    
+    await ticket.save();
+    await ticket.populate('generatedBy', 'name email');
+    if (ticket.assignedTo) await ticket.populate('assignedTo', 'name email');
+    
+    await audit(req, 'TICKET_UPDATED', 'Ticket', ticket.id, { status: b.status, assignedTo: b.assignedTo });
+    res.json(ticket);
+  } catch(e) { next(e); }
+});
 
 // --- ATM Installation Forms ---
 app.post('/api/atm/installation', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
@@ -430,27 +498,9 @@ app.post('/api/atm/installation', auth, permit('admin', 'agent', 'atm'), async (
     });
     await installation.save();
 
-    // Create or update the Terminal in the registry
-    const terminalId = data.terminalId.toUpperCase().trim();
-    let terminal = await Terminal.findOne({ terminalId });
-    if (!terminal) {
-      terminal = new Terminal({
-        terminalId,
-        official: { status: 'Active', name: data.locationName, address: data.locationStreet, city: data.locationCity },
-        current: { businessName: data.locationName, address: data.locationStreet, city: data.locationCity, paymentAmount: 0 }
-      });
-      await audit(req, 'TERMINAL_CREATED_VIA_FORM', 'Terminal', terminalId, { businessName: data.locationName });
-    } else {
-      terminal.official = terminal.official || {};
-      terminal.current = terminal.current || {};
-      terminal.current.businessName = data.locationName || terminal.current.businessName;
-      terminal.current.address = data.locationStreet || terminal.current.address;
-      terminal.current.city = data.locationCity || terminal.current.city;
-      await audit(req, 'TERMINAL_UPDATED_VIA_FORM', 'Terminal', terminalId, { businessName: data.locationName });
-    }
-    await terminal.save();
+    await audit(req, 'ATM_INSTALLATION_SUBMITTED', 'AtmInstallation', installation._id.toString(), { terminalId: data.terminalId });
 
-    res.status(201).json({ message: 'Terminal registered and form saved successfully', installation });
+    res.status(201).json({ message: 'Installation form saved successfully', installation });
   } catch(e) { next(e); }
 });
 
@@ -477,6 +527,67 @@ app.get('/api/atm/installation/:terminalId', auth, permit('admin', 'agent', 'atm
   } catch(e) { next(e); }
 });
 
+app.post('/api/atm/agreement', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
+  try {
+    const data = req.body;
+    if (!data.terminalId) return res.status(400).json({ message: 'Terminal ID is required' });
+    
+    const agreement = new AtmAgreement({
+      ...data,
+      createdBy: req.user._id
+    });
+    await agreement.save();
+
+    await audit(req, 'ATM_AGREEMENT_SUBMITTED', 'AtmAgreement', agreement._id.toString(), { terminalId: data.terminalId });
+
+    res.status(201).json({ message: 'Agreement form saved successfully', agreement });
+  } catch(e) { next(e); }
+});
+
+app.post('/api/atm/removal', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
+  try {
+    const data = req.body;
+    if (!data.terminalId) return res.status(400).json({ message: 'Terminal ID is required' });
+    
+    const removal = new AtmRemoval({
+      ...data,
+      createdBy: req.user._id
+    });
+    await removal.save();
+
+    await audit(req, 'ATM_REMOVAL_SUBMITTED', 'AtmRemoval', removal._id.toString(), { terminalId: data.terminalId });
+
+    res.status(201).json({ message: 'Removal form saved successfully', removal });
+  } catch(e) { next(e); }
+});
+
+app.get('/api/atm/timeline/:terminalId', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
+  try {
+    const termId = req.params.terminalId.toUpperCase().trim();
+    
+    // Fetch all forms associated with this terminal
+    const [installations, agreements, removals, setups] = await Promise.all([
+      AtmInstallation.find({ terminalId: termId }).populate('createdBy', 'name').lean(),
+      AtmAgreement.find({ terminalId: termId }).populate('createdBy', 'name').lean(),
+      AtmRemoval.find({ terminalId: termId }).populate('createdBy', 'name').lean(),
+      AtmSetup.find({ terminalId: termId }).populate('createdBy', 'name').lean()
+    ]);
+
+    // Map each form to a timeline event object
+    const timeline = [
+      ...installations.map(doc => ({ type: 'AtmInstallation', title: 'ATM Installation', date: doc.createdAt, data: doc })),
+      ...agreements.map(doc => ({ type: 'AtmAgreement', title: 'ATM Agreement', date: doc.createdAt, data: doc })),
+      ...removals.map(doc => ({ type: 'AtmRemoval', title: 'ATM Removal', date: doc.createdAt, data: doc })),
+      ...setups.map(doc => ({ type: 'AtmSetup', title: 'ATM Setup & Location', date: doc.createdAt, data: doc }))
+    ];
+
+    // Sort by date (newest first)
+    timeline.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    res.json(timeline);
+  } catch(e) { next(e); }
+});
+
 app.use((err,req,res,next)=>{console.error(err);if(err.name==='ZodError')return res.status(400).json({message:'Validation failed',issues:err.issues});res.status(500).json({message:'An unexpected error occurred',...(process.env.NODE_ENV!=='production'?{detail:err.message}:{})});});
 async function start(){await mongoose.connect(process.env.MONGODB_URI);const email=process.env.ADMIN_EMAIL?.toLowerCase();if(email&&!await User.exists({email}))await User.create({name:'Administrator',email,passwordHash:await bcrypt.hash(process.env.ADMIN_PASSWORD,12),role:'admin'});app.listen(process.env.PORT||4000,'localhost',()=>console.log(`API ready on ${process.env.PORT||4000}`));} if(require.main===module)start().catch(e=>{console.error(e);process.exit(1)});
 
@@ -499,3 +610,5 @@ module.exports = async (req, res) => {
   }
   return app(req, res);
 };
+
+

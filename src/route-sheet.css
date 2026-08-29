@@ -140,3 +140,5 @@
     color: transparent;
   }
 }
+
+@media (max-width: 900px) { .rs-header { flex-direction: column; align-items: stretch; gap: 12px; } .rs-filters { flex-direction: column; align-items: stretch; gap: 8px; } .rs-filters label { width: 100%; } .rs-filters input, .rs-filters select, .rs-filters button { width: 100%; } .rs-paper { overflow-x: auto; padding: 16px; margin: 0 -20px; border-radius: 0; } .rs-table { min-width: 700px; } }

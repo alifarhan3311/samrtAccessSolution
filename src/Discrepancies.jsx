@@ -34,7 +34,7 @@ export default function Discrepancies(){
     {loading ? <LoadingSpinner text="Scanning cash discrepancies & shortfall alerts..."/> : <>
 
     {/* Summary cards */}
-    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:24}}>
+    <div className="summary-cards-grid">
       <div style={{background:'#fff',border:'1px solid #e0e4df',borderTop:'3px solid #d76858',borderRadius:12,padding:20}}>
         <small style={{fontSize:10,fontWeight:800,letterSpacing:'1px',color:'#79827c',textTransform:'uppercase'}}>OPEN DISCREPANCIES</small>
         <strong style={{display:'block',font:'800 32px Manrope',margin:'8px 0 4px',color:'#a63e36'}}>{data.openCount}</strong>
@@ -107,7 +107,7 @@ export default function Discrepancies(){
             </div>
 
             {/* Numbers */}
-            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,textAlign:'center',minWidth:380}}>
+            <div className="discrepancy-stats-grid">
               {[
                 ['PREV BALANCE',d.balanceBeforeJob,'#555'],
                 ['AGENT LOADED',d.cashLoadedByAgent,'#267249'],

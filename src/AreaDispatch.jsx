@@ -4,6 +4,8 @@ const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-T
 const money2=v=>'$'+Number(v||0).toLocaleString();
 const fmt=v=>v?new Date(v).toLocaleDateString('en-CA'):'N/A';
 
+import DailyDispatch from './DailyDispatch.jsx';
+
 export default function AreaDispatch({done}){
   const[areas,setAreas]=useState([]);
   const[agents,setAgents]=useState([]);
@@ -18,6 +20,7 @@ export default function AreaDispatch({done}){
   const[bal,setBal]=useState(null);
   const[loadingTerminals,setLoadingTerminals]=useState(false);
   const[initialLoading,setInitialLoading]=useState(true);
+  const[showSingleDispatch, setShowSingleDispatch] = useState(false);
 
   useEffect(()=>{
     const ld=new Date();const localDate=`${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
@@ -112,9 +115,22 @@ export default function AreaDispatch({done}){
 
   return <main className="area-page">
     <section className="area-control">
-      <p className="eyebrow">ROUTE PLANNER</p>
-      <h2>Assign Location Area Routes</h2>
-      <p>Select one or multiple operational areas (e.g. North A, West C). All available ATMs in the selected areas become part of the agent's route.</p>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
+        <div>
+          <p className="eyebrow">ROUTE PLANNER</p>
+          <h2 style={{margin:'4px 0 0'}}>Assign Location Area Routes</h2>
+        </div>
+        <button 
+          onClick={() => setShowSingleDispatch(true)}
+          style={{
+            background:'#f1f3ef', border:'1px solid #dce1dc', color:'#17211f',
+            padding:'8px 16px', borderRadius:'8px', fontWeight:600, fontSize:'13px', cursor:'pointer'
+          }}
+        >
+          ↗ Single ATM dispatch
+        </button>
+      </div>
+      <p style={{marginTop:0}}>Select one or multiple operational areas (e.g. North A, West C). All available ATMs in the selected areas become part of the agent's route.</p>
 
       {/* Available balance banner */}
       {bal&&<div className={'balance-banner '+(bal.available<=0?'balance-warn':'balance-ok')} style={{marginBottom:16}}>
@@ -163,7 +179,7 @@ export default function AreaDispatch({done}){
         </div>
       </div>
 
-      <div className="area-fields" style={{gridTemplateColumns:'1fr 1fr'}}>
+      <div className="area-fields area-fields-2col">
         <label>Default Agent (Sets for all ATMs)
           <select value={form.agentId} onChange={e=>handleGlobalAgentChange(e.target.value)}>
             <option value="">Select default agent...</option>
@@ -294,5 +310,33 @@ export default function AreaDispatch({done}){
           :'Dispatch area route →'}
       </button>
     </form>}
+
+    {/* Modal Overlay for Single ATM Dispatch */}
+    {showSingleDispatch && (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center',
+        zIndex: 9999, padding: '40px'
+      }}>
+        <div style={{
+          background: '#fff', borderRadius: '12px', width: '100%', maxWidth: '1100px', height: '100%',
+          display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden'
+        }}>
+          <button 
+            onClick={() => setShowSingleDispatch(false)}
+            style={{
+              background: '#f1f3ef', border: 'none', borderBottom: '1px solid #dce1dc', padding: '12px 20px',
+              textAlign: 'right', fontWeight: 'bold', color: '#3a443d', cursor: 'pointer'
+            }}
+          >
+            ✖ Close
+          </button>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#f9faf8' }}>
+            <DailyDispatch done={() => setShowSingleDispatch(false)} />
+          </div>
+        </div>
+      </div>
+    )}
+
   </main>;
 }

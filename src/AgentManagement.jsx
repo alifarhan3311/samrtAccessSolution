@@ -15,8 +15,6 @@ const ALL_TABS = [
   { id: 'notifications', label: 'Notifications' },
   { id: 'terminals', label: 'Terminal Registry' },
   { id: 'tickets', label: 'Generate Ticket' },
-  { id: 'assign', label: 'ATM Setup & Location' },
-  { id: 'dispatch', label: 'Single ATM Dispatch' },
   { id: 'area', label: 'Area Route Dispatch' },
   { id: 'jobs', label: 'Daily Agent Load' },
   { id: 'routesheet', label: 'Daily Route Sheet' },
@@ -147,9 +145,9 @@ export default function AgentManagement(){
         <div className="tab-access-section" style={{marginTop:'1.5rem',paddingTop:'1.5rem',borderTop:'1px solid var(--border)'}}>
           <h4 style={{marginBottom:'0.2rem'}}>Tab Access Permissions</h4>
           <p className="muted" style={{marginBottom:'1rem',fontSize:'0.85rem'}}>Select which tabs this agent is allowed to view and interact with.</p>
-          <div className="checkbox-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:'0.75rem',marginBottom:'1.5rem'}}>
+          <div className="checkbox-grid" style={{display:'grid',gridTemplateColumns:'repeat(2, 1fr)',gap:'0.75rem',marginBottom:'1.5rem'}}>
             {ALL_TABS.map(tab=>(
-              <label key={tab.id} style={{display:'flex',alignItems:'center',gap:'0.5rem',cursor:'pointer',fontSize:'0.9rem',background:'var(--surface-hover)',padding:'0.5rem',borderRadius:'0.4rem'}}>
+              <label key={tab.id} style={{display:'flex',flexDirection:'row',alignItems:'center',gap:'0.5rem',cursor:'pointer',fontSize:'0.85rem',background:'#f4f7f2',padding:'0.5rem',borderRadius:'0.4rem'}}>
                 <input type="checkbox" checked={form.allowedTabs.includes(tab.id)} onChange={e=>{
                   const checked=e.target.checked;
                   setForm(f=>({...f,allowedTabs:checked?[...f.allowedTabs,tab.id]:f.allowedTabs.filter(x=>x!==tab.id)}));

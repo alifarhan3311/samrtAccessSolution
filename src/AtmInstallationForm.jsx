@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
-export default function AtmInstallationForm() {
-  const [form, setForm] = useState({
+export default function AtmInstallationForm({ initialData = null, readOnly = false }) {
+  const [form, setForm] = useState(initialData || {
     terminalId: '', date: '', newTerminalId: '', oldTerminalId: '',
     locationName: '', locationStreet: '', locationCity: '', locationPostalCode: '',
     contactPersonName: '', phone: '', email: '',
@@ -506,10 +506,10 @@ export default function AtmInstallationForm() {
   );
 
   return (
-    <div className="atm-form-wrapper">
+    <div className={`atm-form-wrapper ${readOnly ? 'readonly-mode' : ''}`}>
       {/* Top Bar */}
       <div className="atm-top-bar no-print">
-        <div className="search-group">
+        <div className="search-group" style={{ visibility: readOnly ? 'hidden' : 'visible' }}>
           <input type="text" placeholder="Search by Terminal ID..." value={searchId}
             onChange={e => setSearchId(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()} />
@@ -518,9 +518,11 @@ export default function AtmInstallationForm() {
           </button>
         </div>
         <div className="action-group">
-          <button className="atm-btn primary" onClick={handleSubmit} disabled={loading}>
-            {loading ? 'Saving...' : '✓ Submit & Register'}
-          </button>
+          {!readOnly && (
+            <button className="atm-btn primary" onClick={handleSubmit} disabled={loading}>
+              {loading ? 'Saving...' : '✓ Submit & Register'}
+            </button>
+          )}
           <button className="atm-btn secondary" onClick={handlePrint}>
             🖨 Print / PDF
           </button>

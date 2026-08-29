@@ -98,6 +98,7 @@ const ticketSchema = new mongoose.Schema({
   problem:     { type: String, required: true, maxlength: 2000 },
   status:      { type: String, enum: ['Open', 'In Progress', 'Resolved', 'Closed'], default: 'Open', index: true },
   generatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  assignedTo:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   resolutionNote: { type: String, maxlength: 2000 },
 }, { timestamps: true });
 
@@ -153,6 +154,68 @@ const atmInstallationSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
+const atmAgreementSchema = new mongoose.Schema({
+  terminalId: { type: String, required: true, index: true },
+  
+  // Customer / Business Details
+  customerName: String,
+  address: String,
+  postalCode: String,
+  telephone: String,
+  email: String,
+  fax: String,
+  date: Date,
+  cellPhone: String,
+
+  // Section 1: MH COMMITMENT
+  atmModelOrLocation: String,
+  surchargeRate: String,
+  remitAmount: String,
+  remitTo: String,
+
+  // Signatures (For Data Entry)
+  mhSignature: String,
+  mhName: String,
+  mhDesignation: String,
+  
+  customerSignature: String,
+  customerNameOwner: String,
+  customerDriversLic: String,
+  customerTelephone: String,
+  customerHomeAddress: String,
+  
+  remarks: String,
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+}, { timestamps: true });
+
+const atmRemovalSchema = new mongoose.Schema({
+  terminalId: { type: String, required: true, index: true },
+  date: Date,
+  time: String,
+  locationName: String,
+  address: String,
+  reasonForRemoval: String,
+  machineModelNo: String,
+  machineSerialNo: String,
+  cashInCassette: String,
+  rejectBin: String,
+  totalNumberOfBills: String,
+  inventoryNumber: String,
+  removedBy: String,
+  receiverSignature: String,
+  dateReceived: Date,
+  remarks: String,
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+}, { timestamps: true });
+
+const atmSetupSchema = new mongoose.Schema({
+  terminalId: { type: String, required: true, index: true },
+  date: Date,
+  locationName: String,
+  remarks: String,
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+}, { timestamps: true });
+
 module.exports = {
   Terminal:           mongoose.model('Terminal', terminalSchema),
   User:               mongoose.model('User', userSchema),
@@ -164,4 +227,7 @@ module.exports = {
   CashDiscrepancy:    mongoose.model('CashDiscrepancy', cashDiscrepancySchema),
   Ticket:             mongoose.model('Ticket', ticketSchema),
   AtmInstallation:    mongoose.model('AtmInstallation', atmInstallationSchema),
+  AtmAgreement:       mongoose.model('AtmAgreement', atmAgreementSchema),
+  AtmRemoval:         mongoose.model('AtmRemoval', atmRemovalSchema),
+  AtmSetup:           mongoose.model('AtmSetup', atmSetupSchema),
 };

@@ -226,7 +226,7 @@ export default function AgentJobs({ role }) {
         </div>
       </div>
 
-      <div className="aj-filters ops-filters" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+      <div className="aj-filters">
         <label>Search
           <input placeholder="Terminal, business or city…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         </label>

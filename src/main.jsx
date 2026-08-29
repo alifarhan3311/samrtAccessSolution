@@ -30,6 +30,12 @@ import'./system-logs.css';
 import'./loader.css';
 import LoadingSpinner from './LoadingSpinner.jsx';
 
+window.addEventListener('unhandledrejection', (event) => {
+  if (event.reason && event.reason.stack && (event.reason.stack.includes('200.js') || event.reason.message.includes('M_ID'))) {
+    event.preventDefault(); // Suppress browser extension error
+  }
+});
+
 const nativeFetch=window.fetch.bind(window);
 window.fetch=async(...args)=>{
   const response=await nativeFetch(...args);
@@ -62,6 +68,7 @@ function Shell(){
   const[user,setUser]=useState(()=>JSON.parse(localStorage.getItem('user')||'null'));
   const navigate=useNavigate();
   const location=useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   if(!user)return <Login done={u=>{setUser(u);navigate(u.role==='agent'?'/jobs':'/dashboard')}}/>;
   const logout=()=>{localStorage.clear();setUser(null)};
@@ -73,8 +80,6 @@ function Shell(){
     ['notifications','Notifications','●','/notifications'],
     ['terminals','Terminals','▦','/terminals'],
     ['tickets','Generate Ticket','🎫','/tickets'],
-    ['assign','ATM setup & location','⌖','/assign'],
-    ['dispatch','Single ATM dispatch','↗','/dispatch'],
     ['area','Area route dispatch','⌘','/area'],
     ['jobs','Daily agent load','▣','/jobs'],
     ['routesheet','Daily route','🖨','/routesheet'],
@@ -103,8 +108,6 @@ function Shell(){
     notifications:'Notifications & setup queue',
     terminals:'Terminal registry',
     tickets:'Generate & view tickets',
-    assign:'ATM setup & current location',
-    dispatch:'Single ATM dispatch',
     area:'Location area route dispatch',
     jobs:'Daily agent load',
     routesheet:'Daily Route Sheet',
@@ -123,8 +126,6 @@ function Shell(){
       notifications:'/notifications',
       terminals:'/terminals',
       tickets:'/tickets',
-      assign:'/assign',
-      dispatch:'/dispatch',
       area:'/area',
       jobs:'/jobs',
       routesheet:'/routesheet',
@@ -142,14 +143,19 @@ function Shell(){
   const currentPath=location.pathname.replace(/^\//,'')||(agent?'jobs':'dashboard');
 
   return <div className="shell">
-    <aside>
+    <aside className={mobileMenuOpen ? 'open' : ''}>
       <div className="logo"><div className="mark">S</div><div><b>Smart Access</b><small>COMMAND CENTER</small></div></div>
-      <nav>{links.map(x=><button key={x[0]} className={location.pathname===x[3]||(x[0]==='dashboard'&&location.pathname==='/')?'active':''} onClick={()=>navigate(x[3])}><i>{x[2]}</i>{x[1]}</button>)}</nav>
+      <nav>{links.map(x=><button key={x[0]} className={location.pathname===x[3]||(x[0]==='dashboard'&&location.pathname==='/')?'active':''} onClick={()=>{navigate(x[3]);setMobileMenuOpen(false);}}><i>{x[2]}</i>{x[1]}</button>)}</nav>
       <div className="user"><span>{user.name?.[0]}</span><div><b>{user.name}</b><small>{user.role}</small></div><button onClick={logout}>&#8617;</button></div>
+      {mobileMenuOpen && <button className="mobile-close" onClick={() => setMobileMenuOpen(false)}>×</button>}
     </aside>
+    {mobileMenuOpen && <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)}></div>}
     <section className="content">
       <header>
-        <div><p className="eyebrow">ATM FLEET OPERATIONS</p><h2>{titles[currentPath]||currentPath}</h2></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <button className="mobile-toggle" onClick={() => setMobileMenuOpen(true)}>☰</button>
+          <div><p className="eyebrow">ATM FLEET OPERATIONS</p><h2>{titles[currentPath]||currentPath}</h2></div>
+        </div>
         <div className="live"><span></span> Systems operational</div>
       </header>
       <Routes>
@@ -157,8 +163,6 @@ function Shell(){
         <Route path="/dashboard" element={<Dashboard go={go}/>} />
         <Route path="/notifications" element={<Notifications go={go}/>} />
         <Route path="/terminals" element={<TerminalRegistry/>} />
-        <Route path="/assign" element={<AssignTerminal/>} />
-        <Route path="/dispatch" element={<DailyDispatch done={()=>go('jobs')}/>} />
         <Route path="/area" element={<AreaDispatch done={()=>go('jobs')}/>} />
         <Route path="/jobs" element={<AgentJobs role={user.role}/>} />
         <Route path="/routesheet" element={<RouteSheet/>} />
@@ -207,7 +211,7 @@ function Dashboard({go}){
       <article className="stat" style={{borderTop:'3px solid #357064'}}><p>Returned by agents</p><strong style={{color:'#1e5040'}}>{money(today.returned||0)}</strong><small>Unspent cash back</small></article>
     </div>
 
-    <div className="stats" style={{gridTemplateColumns:'repeat(3,1fr)',marginTop:10}}>
+    <div className="stats stats-3col" style={{marginTop:10}}>
       <article className="stat accent"><p>Cash in all machines</p><strong>{money(f.totalCashInMachines||0)}</strong><small>Live balance across fleet</small></article>
       <article className="stat" style={{borderTop:'3px solid #8b5cf6'}}><p>Net cash out today</p><strong style={{color:(today.balance||0)>=0?'#a63e36':'#267249'}}>{money(Math.abs(today.balance||0))}</strong><small>{(today.balance||0)>=0?'Dispatched exceeds returned':'Surplus returned'}</small></article>
       <article className="stat" style={{borderTop:'3px solid #78909c'}}><p>Open jobs</p><strong>{jobs.open||0}</strong><small>{jobs.pendingApproval||0} awaiting approval</small></article>

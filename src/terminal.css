@@ -38,7 +38,7 @@
 
 /* ── Responsive sidebar offset ──────────────────────────────── */
 @media (max-width: 900px) {
-  .full-table { max-width: calc(100vw - 115px); }
+  .full-table { max-width: calc(100vw - 30px); }
 }
 
 /* ══════════════════════════════════════════════════════════════
