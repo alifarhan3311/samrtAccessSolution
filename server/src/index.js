@@ -81,7 +81,23 @@ app.get('/api/dashboard',auth,async(req,res,next)=>{try{
     discrepancies:{ open:openDiscrepancies, totalShortfall },
   });
 }catch(e){next(e)}});
-app.get('/api/notifications',auth,async(req,res,next)=>{try{const [setup,lowCash,missing,latestImport]=await Promise.all([Terminal.find({setupRequired:true}).select('terminalId official.status official.name official.address official.city official.locationArea official.cashBalance official.lastCommunication official.lastWithdrawalAt setupReason createdAt').sort({createdAt:-1}).limit(200),Terminal.find({'alert.enabled':true,$expr:{$lte:['$official.cashBalance','$alert.threshold']}}).select('terminalId official.name official.address official.city official.cashBalance alert.threshold').sort({'official.cashBalance':1}).limit(200),Terminal.find({'official.sourcePresent':false}).select('terminalId official.name official.address official.city official.lastSyncedAt').sort({'official.lastSyncedAt':-1}).limit(100),ImportRun.findOne().sort({createdAt:-1}).select('fileName changes totals createdAt').lean()]);const recentChanges=latestImport?.changes||[];res.json({setup,lowCash,missing,recentChanges,latestImport:latestImport?{fileName:latestImport.fileName,createdAt:latestImport.createdAt,totals:latestImport.totals}:null,total:setup.length+lowCash.length+missing.length+recentChanges.length});}catch(e){next(e)}});
+app.get('/api/notifications',auth,async(req,res,next)=>{try{const [setup,lowCash,missing,latestImport,unassignedTickets]=await Promise.all([
+  Terminal.find({setupRequired:true}).select('terminalId official.status official.name official.address official.city official.locationArea official.cashBalance official.lastCommunication official.lastWithdrawalAt setupReason createdAt').sort({createdAt:-1}).limit(200),
+  Terminal.find({'alert.enabled':true,$expr:{$lte:['$official.cashBalance','$alert.threshold']}}).select('terminalId official.name official.address official.city official.cashBalance alert.threshold').sort({'official.cashBalance':1}).limit(200),
+  Terminal.find({'official.sourcePresent':false}).select('terminalId official.name official.address official.city official.lastSyncedAt').sort({'official.lastSyncedAt':-1}).limit(100),
+  ImportRun.findOne().sort({createdAt:-1}).select('fileName changes totals createdAt').lean(),
+  Ticket.find({ $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }], status: { $ne: 'Closed' } }).sort({ createdAt: -1 }).limit(100).populate('generatedBy', 'name email').lean()
+]);
+const recentChanges=latestImport?.changes||[];
+res.json({
+  setup,
+  lowCash,
+  missing,
+  unassignedTickets: unassignedTickets || [],
+  recentChanges,
+  latestImport:latestImport?{fileName:latestImport.fileName,createdAt:latestImport.createdAt,totals:latestImport.totals}:null,
+  total:setup.length+lowCash.length+missing.length+recentChanges.length+(unassignedTickets?.length||0)
+});}catch(e){next(e)}});
 app.get('/api/terminals',auth,async(req,res,next)=>{try{const page=Math.max(1,+req.query.page||1),limit=Math.min(100,Math.max(1,+req.query.limit||25));const q={};if(req.query.search){const s=String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');q.$or=[{terminalId:new RegExp(s,'i')},{'current.businessName':new RegExp(s,'i')},{'current.city':new RegExp(s,'i')},{'current.address':new RegExp(s,'i')}];}if(req.query.status)q['official.status']=req.query.status;if(req.query.city)q['current.city']=new RegExp(`^${String(req.query.city).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`,'i');const [items,total]=await Promise.all([Terminal.find(q).sort({terminalId:1}).skip((page-1)*limit).limit(limit),Terminal.countDocuments(q)]);res.json({items,total,page,pages:Math.ceil(total/limit)});}catch(e){next(e)}});
 app.get('/api/terminals/:id',auth,async(req,res,next)=>{try{const item=await Terminal.findOne({terminalId:req.params.id.toUpperCase()}).populate('assignmentHistory.assignedBy','name email');if(!item)return res.status(404).json({message:'Terminal not found'});res.json(item);}catch(e){next(e)}});
 app.patch('/api/terminals/:id/status',auth,permit('admin','manager','terminals'),async(req,res,next)=>{try{const {status}=z.object({status:z.enum(['Active','Inactive'])}).parse(req.body);const t=await Terminal.findOneAndUpdate({terminalId:req.params.id.toUpperCase()},{$set:{'official.status':status}},{new:true});if(!t)return res.status(404).json({message:'Terminal not found'});await audit(req,'TERMINAL_STATUS_CHANGED','Terminal',t.id,{terminalId:t.terminalId,status});res.json(t);}catch(e){next(e)}});
@@ -446,6 +462,22 @@ app.post('/api/tickets', auth, async(req, res, next) => {
       agentName: ticket.assignedTo?.name,
       agentEmail: ticket.assignedTo?.email
     });
+
+    const io = req.app.locals.io;
+    if (io) {
+      const bizName = t.current?.businessName || t.official?.tempName || t.official?.name || '';
+      io.emit('terminal_alert', {
+        type: 'ticket',
+        title: 'New Maintenance Ticket',
+        message: `New ticket generated for Terminal ${t.terminalId}${bizName ? ' (' + bizName + ')' : ''} by ${req.user.name}: "${b.problem.slice(0, 75)}${b.problem.length > 75 ? '...' : ''}"`,
+        ticketId: ticket.id,
+        terminalId: t.terminalId,
+        problem: b.problem,
+        generatedBy: req.user.name,
+        assignedTo: ticket.assignedTo ? ticket.assignedTo.name : null
+      });
+    }
+
     res.status(201).json(ticket);
   } catch(e) { next(e); }
 });
@@ -601,6 +633,89 @@ app.post('/api/atm/removal', auth, permit('admin', 'agent', 'atm'), async (req, 
   } catch(e) { next(e); }
 });
 
+app.post('/api/atm/upload-form', auth, permit('admin', 'agent', 'atm'), proofUpload.single('file'), async (req, res, next) => {
+  try {
+    const { terminalId, formType, date, locationName, remarks } = req.body;
+    if (!terminalId) return res.status(400).json({ message: 'Terminal ID is required' });
+    if (!formType) return res.status(400).json({ message: 'Form Type is required' });
+    if (!req.file) return res.status(400).json({ message: 'Form document/picture file is required' });
+
+    const cleanTermId = terminalId.toUpperCase().trim();
+
+    // Upload file to Cloudinary
+    const uploaded = await uploadBuffer(req.file.buffer, {
+      folder: 'atm-command-center/forms',
+      resource_type: req.file.mimetype === 'application/pdf' ? 'raw' : 'image',
+      public_id: `form_${cleanTermId}_${formType}_${Date.now()}`,
+      overwrite: false
+    });
+
+    const docFile = {
+      url: uploaded.secureUrl,
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size
+    };
+
+    const effectiveDate = date ? new Date(date) : new Date();
+
+    let createdRecord = null;
+    if (formType === 'installation') {
+      createdRecord = await AtmInstallation.create({
+        terminalId: cleanTermId,
+        date: effectiveDate,
+        locationName: locationName || '',
+        remarks: remarks || '',
+        documentUrl: uploaded.secureUrl,
+        documentFile: docFile,
+        createdBy: req.user._id
+      });
+      await audit(req, 'ATM_INSTALLATION_DOCUMENT_UPLOADED', 'AtmInstallation', createdRecord.id, { terminalId: cleanTermId });
+    } else if (formType === 'agreement') {
+      createdRecord = await AtmAgreement.create({
+        terminalId: cleanTermId,
+        date: effectiveDate,
+        customerName: locationName || '',
+        remarks: remarks || '',
+        documentUrl: uploaded.secureUrl,
+        documentFile: docFile,
+        createdBy: req.user._id
+      });
+      await audit(req, 'ATM_AGREEMENT_DOCUMENT_UPLOADED', 'AtmAgreement', createdRecord.id, { terminalId: cleanTermId });
+    } else if (formType === 'removal') {
+      createdRecord = await AtmRemoval.create({
+        terminalId: cleanTermId,
+        date: effectiveDate,
+        locationName: locationName || '',
+        remarks: remarks || '',
+        documentUrl: uploaded.secureUrl,
+        documentFile: docFile,
+        createdBy: req.user._id
+      });
+      await audit(req, 'ATM_REMOVAL_DOCUMENT_UPLOADED', 'AtmRemoval', createdRecord.id, { terminalId: cleanTermId });
+    } else if (formType === 'setup') {
+      createdRecord = await AtmSetup.create({
+        terminalId: cleanTermId,
+        date: effectiveDate,
+        locationName: locationName || '',
+        remarks: remarks || '',
+        documentUrl: uploaded.secureUrl,
+        documentFile: docFile,
+        createdBy: req.user._id
+      });
+      await audit(req, 'ATM_SETUP_DOCUMENT_UPLOADED', 'AtmSetup', createdRecord.id, { terminalId: cleanTermId });
+    } else {
+      return res.status(400).json({ message: 'Invalid Form Type' });
+    }
+
+    res.status(201).json({
+      message: 'Form document uploaded successfully',
+      record: createdRecord,
+      url: uploaded.secureUrl
+    });
+  } catch(e) { next(e); }
+});
+
 app.get('/api/atm/timeline/:terminalId', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
   try {
     const termId = req.params.terminalId.toUpperCase().trim();
@@ -615,10 +730,10 @@ app.get('/api/atm/timeline/:terminalId', auth, permit('admin', 'agent', 'atm'), 
 
     // Map each form to a timeline event object
     const timeline = [
-      ...installations.map(doc => ({ type: 'AtmInstallation', title: 'ATM Installation', date: doc.createdAt, data: doc })),
-      ...agreements.map(doc => ({ type: 'AtmAgreement', title: 'ATM Agreement', date: doc.createdAt, data: doc })),
-      ...removals.map(doc => ({ type: 'AtmRemoval', title: 'ATM Removal', date: doc.createdAt, data: doc })),
-      ...setups.map(doc => ({ type: 'AtmSetup', title: 'ATM Setup & Location', date: doc.createdAt, data: doc }))
+      ...installations.map(doc => ({ type: 'AtmInstallation', title: 'ATM Installation', date: doc.date || doc.createdAt, data: doc })),
+      ...agreements.map(doc => ({ type: 'AtmAgreement', title: 'ATM Agreement', date: doc.date || doc.createdAt, data: doc })),
+      ...removals.map(doc => ({ type: 'AtmRemoval', title: 'ATM Removal', date: doc.date || doc.createdAt, data: doc })),
+      ...setups.map(doc => ({ type: 'AtmSetup', title: 'ATM Setup & Location', date: doc.date || doc.createdAt, data: doc }))
     ];
 
     // Sort by date (newest first)

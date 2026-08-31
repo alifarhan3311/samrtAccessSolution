@@ -151,6 +151,13 @@ const atmInstallationSchema = new mongoose.Schema({
   commissionSplit: String,
   officeAtmSerial: String,
   remarks: String,
+  documentUrl: String,
+  documentFile: {
+    url: String,
+    originalName: String,
+    mimeType: String,
+    size: Number
+  },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
@@ -185,6 +192,13 @@ const atmAgreementSchema = new mongoose.Schema({
   customerHomeAddress: String,
   
   remarks: String,
+  documentUrl: String,
+  documentFile: {
+    url: String,
+    originalName: String,
+    mimeType: String,
+    size: Number
+  },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
@@ -205,6 +219,13 @@ const atmRemovalSchema = new mongoose.Schema({
   receiverSignature: String,
   dateReceived: Date,
   remarks: String,
+  documentUrl: String,
+  documentFile: {
+    url: String,
+    originalName: String,
+    mimeType: String,
+    size: Number
+  },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
@@ -213,6 +234,13 @@ const atmSetupSchema = new mongoose.Schema({
   date: Date,
   locationName: String,
   remarks: String,
+  documentUrl: String,
+  documentFile: {
+    url: String,
+    originalName: String,
+    mimeType: String,
+    size: Number
+  },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 

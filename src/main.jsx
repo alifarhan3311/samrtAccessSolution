@@ -66,6 +66,74 @@ function Login({done}){
   return <main className="login"><section className="brand-panel"><div className="mark">S</div><div><p className="eyebrow">Smart Access Solutions</p><h1>Every terminal.<br/>Exactly where it belongs.</h1><p>Operational visibility for your complete ATM fleet.</p></div><small>SECURE OPERATIONS PLATFORM · CANADA</small></section><form className="login-card" onSubmit={submit}><div><p className="eyebrow">WELCOME BACK</p><h2>Sign in to Command Center</h2><p className="muted">Use your organization credentials.</p></div><label>Email<input value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label><label>Password<input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label>{error&&<p className="error">{error}</p>}<button>Sign in securely <span>&#8594;</span></button><small className="muted">Protected by encrypted authentication and activity monitoring.</small></form></main>;
 }
 
+function playNotificationSound(type = 'default') {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const now = ctx.currentTime;
+    
+    if (type === 'error') {
+      // Urgent double beep for critical zero-balance or emergency
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(480, now);
+      osc.frequency.setValueAtTime(320, now + 0.15);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.35);
+    } else if (type === 'ticket') {
+      // Crisp dual-tone chime for incoming tickets (D5 -> A5 -> D6)
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc2.type = 'triangle';
+
+      osc1.frequency.setValueAtTime(587.33, now);
+      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+
+      osc2.frequency.setValueAtTime(880, now);
+      osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.12);
+
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.6);
+      osc2.stop(now + 0.6);
+    } else {
+      // Pleasant subtle notification ding
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(659.25, now);
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.5);
+    }
+  } catch (err) {
+    console.warn('Notification audio playback failed:', err);
+  }
+}
+
 function Shell(){
   const[user,setUser]=useState(()=>JSON.parse(localStorage.getItem('user')||'null'));
   const navigate=useNavigate();
@@ -76,9 +144,51 @@ function Shell(){
     if (!user) return;
     const socket = io('/', { auth: { token: localStorage.getItem('token') } });
     socket.on('terminal_alert', (data) => {
-      if (data.type === 'error') toast.error(data.message, { duration: 8000 });
-      else if (data.type === 'warning') toast(data.message, { icon: '⚠️', duration: 6000 });
-      else toast.success(data.message);
+      playNotificationSound(data.type);
+
+      if (data.type === 'ticket') {
+        toast((t) => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '280px' }}>
+            <span style={{ fontSize: '24px' }}>🎫</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: '13px', color: '#111827' }}>
+                New Ticket: {data.terminalId}
+              </div>
+              <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#4b5563', lineHeight: '1.3' }}>
+                {data.message}
+              </p>
+            </div>
+            {user.role === 'admin' && (
+              <button 
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  navigate('/tickets');
+                }}
+                style={{
+                  padding: '6px 12px',
+                  background: '#357064',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+              >
+                Assign &rarr;
+              </button>
+            )}
+          </div>
+        ), { duration: 12000, id: `ticket-${data.ticketId || Date.now()}` });
+      } else if (data.type === 'error') {
+        toast.error(data.message, { duration: 8000 });
+      } else if (data.type === 'warning') {
+        toast(data.message, { icon: '⚠️', duration: 6000 });
+      } else {
+        toast.success(data.message);
+      }
     });
     return () => socket.disconnect();
   }, [user]);
