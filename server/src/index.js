@@ -258,7 +258,7 @@ app.get('/api/logs',auth,permit('admin','manager','logs'),async(req,res,next)=>{
       wishAmount:meta.wishAmount||0,
       amount:meta.amount||0,
       dueAt:meta.dueAt||null,
-      note:meta.note||meta.resolveNote||'',
+      note:meta.note||meta.resolveNote||meta.problem||meta.resolutionNote||'',
       proofFiles:meta.proofFiles||[],
       metadata:meta,
       ip:a.ip||''
@@ -441,6 +441,7 @@ app.post('/api/tickets', auth, async(req, res, next) => {
     await audit(req, 'TICKET_CREATED', 'Ticket', ticket.id, { 
       terminalId: t.terminalId, 
       problem: b.problem, 
+      status: ticket.status || 'Open',
       agentId: ticket.assignedTo?._id,
       agentName: ticket.assignedTo?.name,
       agentEmail: ticket.assignedTo?.email
@@ -454,15 +455,39 @@ app.get('/api/tickets', auth, async(req, res, next) => {
     const page = Math.max(1, +req.query.page || 1);
     const limit = Math.min(100, Math.max(1, +req.query.limit || 25));
     const q = {};
-    if(req.query.status) q.status = req.query.status;
+    if(req.query.status) {
+      if (req.query.status.includes(',')) {
+        q.status = { $in: req.query.status.split(',').map(s => s.trim()) };
+      } else {
+        q.status = req.query.status;
+      }
+    }
+    if(req.query.assignedTo) {
+      q.assignedTo = req.query.assignedTo;
+    } else if (req.user.role === 'agent' && !req.query.all) {
+      q.assignedTo = req.user._id;
+    }
     if(req.query.terminalId) q.terminalId = new RegExp(String(req.query.terminalId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     
     const [items, total] = await Promise.all([
       Ticket.find(q).sort({createdAt:-1}).skip((page-1)*limit).limit(limit)
         .populate('generatedBy', 'name email')
-        .populate('assignedTo', 'name email'),
+        .populate('assignedTo', 'name email')
+        .lean(),
       Ticket.countDocuments(q)
     ]);
+
+    if (items.length > 0) {
+      const termIds = [...new Set(items.map(t => t.terminalId).filter(Boolean))];
+      const terms = await Terminal.find({ terminalId: { $in: termIds } })
+        .select('terminalId official.name official.address official.city official.locationArea official.status current.businessName current.address current.city')
+        .lean();
+      const termMap = new Map(terms.map(t => [t.terminalId, t]));
+      for (const item of items) {
+        item.terminal = termMap.get(item.terminalId) || null;
+      }
+    }
+
     res.json({items, total, page, pages: Math.ceil(total/limit)});
   } catch(e) { next(e); }
 });
@@ -476,11 +501,14 @@ app.patch('/api/tickets/:id', auth, async(req, res, next) => {
     }).parse(req.body);
     
     const ticket = await Ticket.findById(req.params.id);
-    if(!ticket) return res.status(404).json({message: 'Ticket not found'});
-    
     if(b.status) ticket.status = b.status;
     if(b.resolutionNote !== undefined) ticket.resolutionNote = b.resolutionNote;
-    if(b.assignedTo && req.user.role === 'admin') ticket.assignedTo = b.assignedTo;
+    if(b.assignedTo && req.user.role === 'admin') {
+      if(['Resolved', 'Closed'].includes(ticket.status)) {
+        return res.status(400).json({ message: `Cannot reassign agent on a ${ticket.status} ticket.` });
+      }
+      ticket.assignedTo = b.assignedTo;
+    }
     
     await ticket.save();
     await ticket.populate('generatedBy', 'name email');
@@ -488,6 +516,7 @@ app.patch('/api/tickets/:id', auth, async(req, res, next) => {
     
     await audit(req, 'TICKET_UPDATED', 'Ticket', ticket.id, { 
       status: b.status, 
+      resolutionNote: ticket.resolutionNote,
       agentId: ticket.assignedTo?._id,
       agentName: ticket.assignedTo?.name,
       agentEmail: ticket.assignedTo?.email

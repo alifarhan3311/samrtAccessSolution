@@ -22,6 +22,8 @@ const ACTION_CONFIG = {
   TERMINAL_ASSIGNED:     { label: 'ATM Location Assigned', color: '#0284c7', bg: '#f0f9ff', icon: '⌖' },
   AGENT_JOB_UPDATED:     { label: 'Task Status Updated', color: '#d97706', bg: '#fffbeb', icon: '🔄' },
   AGENT_JOB_APPROVED:    { label: 'Task Approved & Completed', color: '#16a34a', bg: '#f0fdf4', icon: '✅' },
+  TICKET_CREATED:        { label: 'Ticket Created', color: '#0284c7', bg: '#e0f2fe', icon: '🎫' },
+  TICKET_UPDATED:        { label: 'Ticket Updated', color: '#7c3aed', bg: '#f5f3ff', icon: '📝' },
   TERMINAL_STATUS_CHANGED:{ label: 'ATM Status Changed', color: '#9333ea', bg: '#faf5ff', icon: '▦' },
   AGENT_CREATED:         { label: 'New Agent Account', color: '#059669', bg: '#ecfdf5', icon: '☺' },
   AGENT_UPDATED:         { label: 'Agent Profile Updated', color: '#0891b2', bg: '#ecfeff', icon: '✏' },
@@ -41,7 +43,12 @@ const TASK_STATUS_PILL = {
   accepted:       { label: 'Accepted', color: '#4338ca', bg: '#e0e7ff', icon: '👍' },
   assigned:       { label: 'Assigned', color: '#475569', bg: '#f1f5f9', icon: '📥' },
   issue_reported: { label: 'Issue Reported', color: '#b91c1c', bg: '#fee2e2', icon: '⚠️' },
-  cancelled:      { label: 'Cancelled', color: '#64748b', bg: '#f8fafc', icon: '🚫' }
+  cancelled:      { label: 'Cancelled', color: '#64748b', bg: '#f8fafc', icon: '🚫' },
+  // Ticket Statuses
+  'Open':         { label: 'Open', color: '#92400e', bg: '#fef3c7', icon: '⏳' },
+  'In Progress':  { label: 'In Progress', color: '#1e40af', bg: '#dbeafe', icon: '⚙️' },
+  'Resolved':     { label: 'Resolved', color: '#065f46', bg: '#d1fae5', icon: '✅' },
+  'Closed':       { label: 'Closed', color: '#374151', bg: '#f3f4f6', icon: '🔒' }
 };
 
 function formatTimestamp(ts) {
