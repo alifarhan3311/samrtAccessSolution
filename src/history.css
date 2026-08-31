@@ -1,7 +1,7 @@
 .history-toolbar{display:flex;align-items:end;justify-content:space-between;padding:28px 0 18px;flex-wrap:wrap;gap:12px}.history-toolbar h3{font:700 23px Manrope;margin:4px 0}.history-toolbar button{border:0;border-radius:9px;background:#183d36;color:#fff;padding:12px 17px;font-weight:700}.history-toolbar button:disabled{opacity:.4}.history-filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;background:#fff;border:1px solid #e0e4df;border-radius:12px;padding:16px}.history-filters label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#747e78}.history-filters input{border:1px solid #d9dfda;border-radius:8px;padding:10px;text-transform:none}.history-count{font-size:12px;color:#7a837e;margin:15px 2px}.history-table{overflow:auto;max-width:100%}.history-table table{min-width:1750px}.history-table td{vertical-align:top}.history-table td small{display:block;color:#858e89;margin-top:4px;white-space:normal}.history-table th,.history-table td{white-space:nowrap}.history-table th:nth-child(2),.history-table td:nth-child(2),.history-table th:nth-child(4),.history-table td:nth-child(4),.history-table th:last-child,.history-table td:last-child{white-space:normal;min-width:230px}@media(max-width:900px){.history-table{max-width:calc(100vw - 30px)}.history-filters{grid-template-columns:1fr 1fr}}@media(max-width:600px){.history-toolbar{align-items:start;gap:15px;flex-direction:column}.history-filters{grid-template-columns:1fr}}
 
 /* ═══════════════════════════════════════════════════════════════
-   ASSIGNMENT HISTORY — card grid + detail modal
+   ASSIGNMENT HISTORY — TABLE VIEW + DETAIL MODAL
    ═══════════════════════════════════════════════════════════════ */
 
 /* ── Empty state ────────────────────────────────────────────── */
@@ -13,36 +13,83 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   CARD GRID
+   TABLE
    ═══════════════════════════════════════════════════════════════ */
-.ah-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-  gap: 16px;
+.ah-table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
-.ah-card {
-  background: #fff;
-  border: 1px solid #dfe4df;
-  border-radius: 12px;
-  padding: 18px 20px 16px;
+.ah-table {
+  width: 100%;
+  min-width: 1050px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ah-table thead th {
+  background: #f8faf7;
+  border-bottom: 2px solid #e2e8f0;
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #64748b;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.ah-table tbody tr {
   cursor: pointer;
-  transition: box-shadow .18s, transform .18s;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  position: relative;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid #f1f5f9;
 }
-.ah-card:hover {
-  box-shadow: 0 8px 28px #1b2d2518;
-  transform: translateY(-2px);
+
+.ah-table tbody tr:hover {
+  background: #f0fdf4;
 }
-.ah-card:focus-visible {
+
+.ah-table tbody tr:focus-visible {
   outline: 2px solid #183d36;
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
-.ah-card--current {
-  border-top: 4px solid #48a972;
+
+.ah-table tbody td {
+  padding: 12px 14px;
+  color: #1e293b;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.ah-row--current {
+  border-left: 3px solid #48a972;
+}
+
+.ah-cell-terminal {
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  font-family: 'Manrope', sans-serif;
+  letter-spacing: 0.3px;
+}
+
+.ah-cell-address {
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ah-cell-payment {
+  font-weight: 700 !important;
+  color: #166534 !important;
+  font-variant-numeric: tabular-nums;
 }
 
 /* status badge */
@@ -54,7 +101,6 @@
   text-transform: uppercase;
   border-radius: 20px;
   padding: 4px 10px;
-  margin-bottom: 6px;
   width: fit-content;
 }
 .ah-badge--active {
@@ -62,55 +108,8 @@
   color: #267249;
 }
 .ah-badge--ended {
-  background: #eeeeee;
-  color: #6a736d;
-}
-
-.ah-card-terminal {
-  font: 700 18px Manrope;
-  margin: 0 0 2px;
-  color: #17211f;
-}
-.ah-card-biz {
-  font-size: 13px;
-  font-weight: 600;
-  color: #2d3c38;
-  margin: 0;
-}
-.ah-card-loc {
-  font-size: 12px;
-  color: #7d877f;
-  margin: 0 0 10px;
-}
-
-/* meta row */
-.ah-card-meta {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  background: #f4f7f2;
-  border-radius: 8px;
-  padding: 10px 12px;
-  gap: 4px;
-  margin-top: 4px;
-}
-.ah-card-meta div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.ah-card-meta small {
-  font-size: 9px;
-  letter-spacing: .9px;
-  color: #8a938e;
-  text-transform: uppercase;
-}
-.ah-card-meta strong {
-  font-size: 12px;
-  font-weight: 700;
-  color: #17211f;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 /* ═══════════════════════════════════════════════════════════════

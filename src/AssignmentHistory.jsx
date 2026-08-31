@@ -109,45 +109,51 @@ export default function AssignmentHistory() {
             {data.limited ? ' · Result limit reached' : ''}
           </p>
 
-      {/* ── Card Grid ────────────────────────────────────────── */}
+      {/* ── Table View ────────────────────────────────────────── */}
       {data.items.length === 0
         ? <p className="ah-empty">No records found.</p>
         : (
-          <div className="ah-grid">
-            {data.items.map((item, idx) => (
-              <div
-                key={`${item.terminalId}-${item.assignedAt}-${idx}`}
-                className={`ah-card${isCurrent(item) ? ' ah-card--current' : ''}`}
-                onClick={() => setSelected(item)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => e.key === 'Enter' && setSelected(item)}
-              >
-                {/* current / ended badge */}
-                <span className={`ah-badge ${isCurrent(item) ? 'ah-badge--active' : 'ah-badge--ended'}`}>
-                  {isCurrent(item) ? 'Current' : 'Ended'}
-                </span>
-
-                <h4 className="ah-card-terminal">{item.terminalId}</h4>
-                <p  className="ah-card-biz">{item.businessName}</p>
-                <p  className="ah-card-loc">{item.city}</p>
-
-                <div className="ah-card-meta">
-                  <div>
-                    <small>PAYMENT</small>
-                    <strong>{money(item.paymentAmount)}</strong>
-                  </div>
-                  <div>
-                    <small>ASSIGNED</small>
-                    <strong>{item.assignedAt ? new Date(item.assignedAt).toLocaleDateString('en-CA') : '—'}</strong>
-                  </div>
-                  <div>
-                    <small>BY</small>
-                    <strong>{item.assignedBy || 'Unknown'}</strong>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="ah-table-wrap">
+            <table className="ah-table">
+              <thead>
+                <tr>
+                  <th>Terminal ID</th>
+                  <th>Business Name</th>
+                  <th>Address</th>
+                  <th>City</th>
+                  <th>Payment</th>
+                  <th>Status</th>
+                  <th>Assigned Date</th>
+                  <th>Ended Date</th>
+                  <th>Assigned By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.items.map((item, idx) => (
+                  <tr
+                    key={`${item.terminalId}-${item.assignedAt}-${idx}`}
+                    className={`ah-row ${isCurrent(item) ? 'ah-row--current' : ''}`}
+                    onClick={() => setSelected(item)}
+                    tabIndex={0}
+                    onKeyDown={e => e.key === 'Enter' && setSelected(item)}
+                  >
+                    <td className="ah-cell-terminal">{item.terminalId}</td>
+                    <td>{item.businessName}</td>
+                    <td className="ah-cell-address">{item.address}</td>
+                    <td>{item.city}</td>
+                    <td className="ah-cell-payment">{money(item.paymentAmount)}</td>
+                    <td>
+                      <span className={`ah-badge ${isCurrent(item) ? 'ah-badge--active' : 'ah-badge--ended'}`}>
+                        {isCurrent(item) ? 'Current' : 'Ended'}
+                      </span>
+                    </td>
+                    <td>{item.assignedAt ? new Date(item.assignedAt).toLocaleDateString('en-CA') : '—'}</td>
+                    <td>{item.endedAt ? new Date(item.endedAt).toLocaleDateString('en-CA') : '—'}</td>
+                    <td>{item.assignedBy || 'Unknown'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
         </>
