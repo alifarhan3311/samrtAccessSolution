@@ -27,11 +27,11 @@ export default function CashLedger(){
   const[wMsg,setWMsg]=useState({text:'',ok:false});
   const[wSaving,setWSaving]=useState(false);
 
-  const[rForm,setRForm]=useState({agentId:'',amount:'',note:'',date:todayStr()});
-  const[rMsg,setRMsg]=useState({text:'',ok:false});
-  const[rSaving,setRSaving]=useState(false);
-
   const[loadErr,setLoadErr]=useState('');
+
+  const[auditAgentId, setAuditAgentId] = useState('');
+  const[auditData, setAuditData] = useState(null);
+  const[auditLoading, setAuditLoading] = useState(false);
 
   // load agents once
   useEffect(()=>{req('/users/agents').then(setAgents).catch(()=>{})},[]);
@@ -55,6 +55,19 @@ export default function CashLedger(){
 
   useEffect(()=>{loadAll();},[loadAll]);
 
+  useEffect(() => {
+    if (tab === 'agent-audit' && auditAgentId) {
+      setAuditLoading(true);
+      setLoadErr('');
+      req(`/cash/agent-audit?agentId=${auditAgentId}&from=${dateRange.from}&to=${dateRange.to}`)
+        .then(setAuditData)
+        .catch(e => setLoadErr(e.message))
+        .finally(() => setAuditLoading(false));
+    } else if (tab === 'agent-audit') {
+      setAuditData(null);
+    }
+  }, [tab, auditAgentId, dateRange]);
+
   async function addWithdrawal(e){
     e.preventDefault();
     const amount=Number(wForm.amount);
@@ -69,21 +82,6 @@ export default function CashLedger(){
     finally{setWSaving(false);}
   }
 
-  async function addReturn(e){
-    e.preventDefault();
-    const amount=Number(rForm.amount);
-    if(!rForm.agentId){setRMsg({text:'Select an agent.',ok:false});return;}
-    if(amount<0){setRMsg({text:'Enter a valid amount.',ok:false});return;}
-    setRSaving(true);setRMsg({text:'',ok:false});
-    try{
-      await req('/cash/return',{method:'POST',body:JSON.stringify({agentId:rForm.agentId,amount,note:rForm.note||undefined,date:rForm.date})});
-      setRMsg({text:`Recorded: ${money(amount)} cash return saved.`,ok:true});
-      setRForm({agentId:'',amount:'',note:'',date:todayStr()});
-      loadAll();
-    }catch(e){setRMsg({text:e.message,ok:false});}
-    finally{setRSaving(false);}
-  }
-
   async function delEntry(type,id){
     if(!confirm('Delete this record? This cannot be undone.'))return;
     try{await req(`/cash/${type}/${id}`,{method:'DELETE'});loadAll();}
@@ -95,7 +93,7 @@ export default function CashLedger(){
     {/* Header with tabs + date range */}
     <div className="ledger-header">
       <div className="ledger-tabs">
-        {[['overview','Overview'],['withdraw','Bank Withdrawals'],['returns','Cash Returns']].map(([k,v])=>
+        {[['overview','Overview'],['withdraw','Bank Withdrawals'],['agent-audit','Agent Audit']].map(([k,v])=>
           <button key={k} className={tab===k?'active':''} onClick={()=>setTab(k)}>{v}</button>)}
       </div>
       <div className="date-range">
@@ -227,63 +225,87 @@ export default function CashLedger(){
       </div>
     </div>}
 
-    {/* ── RETURNS TAB ── */}
-    {tab==='returns'&&<div className="ledger-split">
-      <div className="ledger-card">
-        <p className="eyebrow">RECORD CASH RETURN</p>
-        <h3>Log unspent cash from agent</h3>
-        <form onSubmit={addReturn} className="ledger-form">
-          <label>
-            Agent
-            <select required value={rForm.agentId} onChange={e=>setRForm(p=>({...p,agentId:e.target.value}))}>
-              <option value="">Select agent...</option>
-              {agents.map(a=><option key={a._id} value={a._id}>{a.name}</option>)}
-            </select>
-          </label>
-          <label>
-            Cash returned (CAD)
-            <input
-              type="number" min="0" step="1" required
-              placeholder="e.g. 240"
-              value={rForm.amount}
-              onChange={e=>setRForm(p=>({...p,amount:e.target.value}))}/>
-          </label>
-          <label>
-            Date
-            <input type="date" value={rForm.date} onChange={e=>setRForm(p=>({...p,date:e.target.value}))}/>
-          </label>
-          <label>
-            Note (optional)
-            <input placeholder="e.g. 2 machines were already full" value={rForm.note} onChange={e=>setRForm(p=>({...p,note:e.target.value}))}/>
-          </label>
-          {rMsg.text&&<p className={rMsg.ok?'success':'error'} style={{margin:0}}>{rMsg.text}</p>}
-          <button disabled={rSaving}>{rSaving?'Saving...':'Record return \u2192'}</button>
-        </form>
-        <div className="ledger-summary">
-          <b>Period total returned: {money(returns.totalAmount)}</b>
-          <span style={{fontSize:12,color:'#888',marginLeft:8}}>{returns.items.length} records</span>
+    {/* ── AGENT AUDIT TAB ── */}
+    {tab==='agent-audit'&&<div className="ledger-card" style={{marginTop:16}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:20}}>
+        <div>
+          <p className="eyebrow">AGENT PERFORMANCE AUDIT</p>
+          <h3>Detailed agent history</h3>
         </div>
+        <label style={{display:'flex',flexDirection:'column',gap:4,fontSize:12,fontWeight:700}}>
+          Select Agent
+          <select value={auditAgentId} onChange={e=>setAuditAgentId(e.target.value)} style={{padding:8,borderRadius:6,border:'1px solid #ccc'}}>
+            <option value="">Choose...</option>
+            {agents.map(a=><option key={a._id} value={a._id}>{a.name}</option>)}
+          </select>
+        </label>
       </div>
 
-      <div className="ledger-card">
-        <p className="eyebrow">RETURN HISTORY</p>
-        <h3>All entries</h3>
-        {returns.items.length===0
-          ?<p className="muted" style={{padding:'20px 0'}}>No returns in this period.</p>
-          :<div className="table-wrap" style={{border:'none',borderRadius:0,overflow:'visible'}}>
-            <table>
-              <thead><tr><th>Date</th><th>Agent</th><th>Amount</th><th>Note</th><th>By</th><th></th></tr></thead>
-              <tbody>{returns.items.map(r=><tr key={r._id}>
-                <td style={{whiteSpace:'nowrap'}}>{fmt(r.date)}</td>
-                <td><b>{r.agent?.name}</b></td>
-                <td><b style={{color:'#267249'}}>{money(r.amount)}</b></td>
-                <td style={{color:'#555',fontSize:12}}>{r.note||'—'}</td>
-                <td style={{fontSize:12}}>{r.recordedBy?.name}</td>
-                <td><button className="del-btn" title="Delete" onClick={()=>delEntry('returns',r._id)}>&#10005;</button></td>
-              </tr>)}</tbody>
-            </table>
-          </div>}
-      </div>
+      {!auditAgentId && <p className="muted" style={{textAlign:'center',padding:'40px 0'}}>Please select an agent to view their audit.</p>}
+      
+      {auditAgentId && auditLoading && <LoadingSpinner text="Fetching agent audit data..." />}
+      
+      {auditAgentId && !auditLoading && auditData && <>
+        <div className="ledger-stats" style={{marginBottom:24}}>
+          <div className="lstat amber">
+            <small>CASH GIVEN (DISPATCHED)</small>
+            <strong>{money(auditData.summary.totalDispatched)}</strong>
+            <span>{auditData.summary.totalJobs} jobs assigned</span>
+          </div>
+          <div className="lstat blue">
+            <small>CASH LOADED</small>
+            <strong>{money(auditData.summary.totalLoaded)}</strong>
+            <span>{auditData.summary.jobsApproved} jobs approved</span>
+          </div>
+          <div className="lstat teal">
+            <small>CASH RETURNED</small>
+            <strong>{money(auditData.summary.totalReturned)}</strong>
+            <span>{auditData.returns.length} returns logged</span>
+          </div>
+          <div className={'lstat '+(auditData.summary.unaccounted>0?'red':'green')}>
+            <small>UNACCOUNTED (SHORTFALL)</small>
+            <strong>{money(auditData.summary.unaccounted)}</strong>
+            <span>Given - Loaded - Returned</span>
+          </div>
+        </div>
+
+        <div className="ledger-split">
+          <div className="ledger-card" style={{border:'1px solid #eee'}}>
+            <p className="eyebrow">JOBS RECORD</p>
+            <h3>Assigned ATMs</h3>
+            {auditData.jobs.length===0 ? <p className="muted">No jobs in this period.</p> :
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Date</th><th>Terminal</th><th>Status</th><th>Given</th><th>Loaded</th></tr></thead>
+                <tbody>{auditData.jobs.map(j=><tr key={j._id}>
+                  <td style={{whiteSpace:'nowrap'}}>{fmt(j.createdAt)}</td>
+                  <td><b>{j.terminalId}</b><br/><span style={{fontSize:11}}>{j.businessName}</span></td>
+                  <td><span className={'badge badge-'+j.status.replace('_','-')} style={{fontSize:10}}>{j.status.replace('_',' ')}</span></td>
+                  <td>{money(j.cashToLoad)}</td>
+                  <td><b style={{color:'#183d36'}}>{money([...j.events].reverse().find(e=>e.status==='cash_loaded')?.cashLoaded ?? (j.status==='approved'?j.cashToLoad:0))}</b></td>
+                </tr>)}</tbody>
+              </table>
+            </div>}
+          </div>
+
+          <div className="ledger-card" style={{border:'1px solid #eee'}}>
+            <p className="eyebrow">CASH RETURNS RECORD</p>
+            <h3>Submitted money</h3>
+            {auditData.returns.length===0 ? <p className="muted">No returns in this period.</p> :
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Date</th><th>Amount</th><th>Note</th><th>Received By</th></tr></thead>
+                <tbody>{auditData.returns.map(r=><tr key={r._id}>
+                  <td style={{whiteSpace:'nowrap'}}>{fmt(r.date)}</td>
+                  <td><b style={{color:'#267249'}}>{money(r.amount)}</b></td>
+                  <td style={{fontSize:12,color:'#555'}}>{r.note||'—'}</td>
+                  <td style={{fontSize:12}}>{r.recordedBy?.name}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>}
+          </div>
+        </div>
+      </>}
     </div>}
 
   </div>;

@@ -35,6 +35,14 @@ export default function RouteSheet() {
   const [groups, setGroups] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [ticketFilter, setTicketFilter] = useState('pending'); // 'pending' or 'all'
+  
+  // Returns state
+  const [returns, setReturns] = useState([]);
+  const [returnsLoading, setReturnsLoading] = useState(false);
+  const [rForm, setRForm] = useState({ amount: '', note: '', terminalId: '' });
+  const [rMsg, setRMsg] = useState({ text: '', ok: false });
+  const [rSaving, setRSaving] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [ticketsLoading, setTicketsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -70,6 +78,15 @@ export default function RouteSheet() {
       .then(res => setTickets(res.items || []))
       .catch(() => setTickets([]))
       .finally(() => setTicketsLoading(false));
+
+    // Load cash returns for this agent on this date
+    if (!isAgent) {
+      setReturnsLoading(true);
+      json(`/cash/returns?agentId=${targetAgent}&from=${date}&to=${date}`)
+        .then(res => setReturns(res.items || []))
+        .catch(() => setReturns([]))
+        .finally(() => setReturnsLoading(false));
+    }
   };
 
   useEffect(() => {
@@ -103,6 +120,36 @@ export default function RouteSheet() {
     } catch (err) {
       alert(err.message);
     }
+  };
+
+  const addReturn = async (e) => {
+    e.preventDefault();
+    const amount = Number(rForm.amount);
+    const targetAgent = isAgent ? (user.sub || user.id || user._id) : agentId;
+    if (!targetAgent) { setRMsg({text: 'Select an agent first.', ok: false}); return; }
+    if (!amount || amount < 0) { setRMsg({text: 'Enter a valid amount.', ok: false}); return; }
+    setRSaving(true); setRMsg({text: '', ok: false});
+    try {
+      await json('/cash/return', {
+        method: 'POST',
+        body: JSON.stringify({ agentId: targetAgent, amount, note: rForm.note || undefined, terminalId: rForm.terminalId || undefined, date })
+      });
+      setRMsg({text: `Recorded: $${amount} cash return saved.`, ok: true});
+      setRForm({ amount: '', note: '', terminalId: '' });
+      loadData();
+    } catch (err) {
+      setRMsg({text: err.message, ok: false});
+    } finally {
+      setRSaving(false);
+    }
+  };
+
+  const delReturn = async (id) => {
+    if(!confirm('Delete this record? This cannot be undone.')) return;
+    try {
+      await json(`/cash/returns/${id}`, { method: 'DELETE' });
+      loadData();
+    } catch (e) { alert(e.message); }
   };
 
   let totalRemaining = 0;
@@ -411,6 +458,73 @@ export default function RouteSheet() {
               </table>
             )}
           </div>
+
+          {/* 3. Cash Returns Section */}
+          {!isAgent && (
+            <div className="ledger-split no-print" style={{ marginTop: '40px', gap: '20px' }}>
+              <div className="ledger-card">
+                <p className="eyebrow">RECORD CASH RETURN</p>
+                <h3>Log unspent cash from agent</h3>
+                <form onSubmit={addReturn} className="ledger-form" style={{ marginTop: '16px' }}>
+                  <label>
+                    Cash returned (CAD)
+                    <input type="number" min="0" step="1" required value={rForm.amount} onChange={e=>setRForm(p=>({...p,amount:e.target.value}))} placeholder="e.g. 240" />
+                  </label>
+                  <label>
+                    Terminal ID (Optional)
+                    <input type="text" value={rForm.terminalId} onChange={e=>setRForm(p=>({...p,terminalId:e.target.value}))} placeholder="e.g. CA101234" />
+                  </label>
+                  <label>
+                    Note (Optional)
+                    <input type="text" value={rForm.note} onChange={e=>setRForm(p=>({...p,note:e.target.value}))} placeholder="Why returned?" />
+                  </label>
+                  {rMsg.text && <p className={rMsg.ok?'success':'error'} style={{margin:0}}>{rMsg.text}</p>}
+                  <button disabled={rSaving || loading} style={{marginTop: '8px'}}>{rSaving ? 'Saving...' : 'Record return \u2192'}</button>
+                </form>
+                <div className="ledger-summary" style={{ marginTop: '20px' }}>
+                  <b>Period total returned: ${(returns.reduce((sum, r) => sum + r.amount, 0)).toLocaleString()}</b>
+                  <span style={{fontSize:12,color:'#888',marginLeft:8}}>{returns.length} records</span>
+                </div>
+              </div>
+
+              <div className="ledger-card">
+                <p className="eyebrow">RETURN HISTORY</p>
+                <h3>{agentDisplayName}'s Returns on {date}</h3>
+                {returnsLoading ? <p>Loading returns...</p> : returns.length === 0 ? (
+                  <p className="muted" style={{padding:'20px 0'}}>No returns recorded for {agentDisplayName} on {date}.</p>
+                ) : (
+                  <div className="table-wrap" style={{border:'none',borderRadius:0,overflow:'visible',marginTop:'16px'}}>
+                    <table className="rs-table">
+                      <thead>
+                        <tr>
+                          <th style={{width:'15%'}}>Time</th>
+                          <th style={{width:'15%'}}>Terminal</th>
+                          <th style={{width:'20%'}}>Amount</th>
+                          <th style={{width:'30%'}}>Note</th>
+                          <th style={{width:'15%'}}>By</th>
+                          <th style={{width:'5%'}}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {returns.map(r => (
+                          <tr key={r._id}>
+                            <td style={{whiteSpace:'nowrap'}}>{new Date(r.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</td>
+                            <td><b>{r.terminalId || '—'}</b></td>
+                            <td><b style={{color:'#267249'}}>${(r.amount||0).toLocaleString()}</b></td>
+                            <td style={{fontSize:'12px', color:'#555'}}>{r.note || '—'}</td>
+                            <td style={{fontSize:'12px'}}>{r.recordedBy?.name}</td>
+                            <td style={{textAlign:'right'}}>
+                              <button className="del-btn" title="Delete" onClick={()=>delReturn(r._id)}>&#10005;</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -68,6 +68,7 @@ const cashReturnSchema = new mongoose.Schema({
   agent:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   amount:      { type: Number, required: true, min: 0 },
   jobIds:      [{ type: mongoose.Schema.Types.ObjectId, ref: 'AgentJob' }], // jobs this return is linked to
+  terminalId:  { type: String }, // specific terminal this return is for
   note:        { type: String, maxlength: 500 },
   recordedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   date:        { type: Date, default: Date.now, index: true },

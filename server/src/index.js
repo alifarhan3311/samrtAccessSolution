@@ -110,7 +110,7 @@ app.get('/api/jobs/active-terminal/:terminalId',auth,async(req,res,next)=>{try{c
 app.get('/api/route-sheet',auth,permit('admin','manager','agent'),async(req,res,next)=>{try{const q={status:{$nin:['cancelled']}};if(req.user.role==='agent')q.agent=req.user._id;else if(req.query.agentId)q.agent=req.query.agentId;if(req.query.date){const today=new Date(req.query.date+'T00:00:00.000Z');const tomorrow=new Date(today);tomorrow.setUTCDate(tomorrow.getUTCDate()+1);q.dueAt={$gte:today,$lt:tomorrow};}const jobs=await AgentJob.find(q).populate('terminal','terminalId official.status official.name official.locationArea official.cashBalance official.city current.businessName current.address current.city').lean();const validJobs=jobs.filter(j=>j.terminal);const grouped={};for(const job of validJobs){const area=job.terminal.official?.locationArea||'Unassigned Area';if(!grouped[area])grouped[area]=[];grouped[area].push(job);}const sortedGroups=Object.keys(grouped).sort().map(key=>({area:key,jobs:grouped[key].sort((a,b)=>a.terminalId.localeCompare(b.terminalId))}));res.json(sortedGroups);}catch(e){next(e)}});
 app.patch('/api/route-sheet/:jobId',auth,permit('admin','manager','agent'),async(req,res,next)=>{try{const job=await AgentJob.findById(req.params.jobId);if(!job)return res.status(404).json({message:'Job not found'});if(req.user.role==='agent'&&String(job.agent)!==String(req.user._id))return res.status(403).json({message:'Not authorized to edit this job'});const b=req.body;if(b.routeExistingCash!==undefined)job.routeExistingCash=b.routeExistingCash===null?undefined:Number(b.routeExistingCash);if(b.routeCashLoaded!==undefined)job.routeCashLoaded=b.routeCashLoaded===null?undefined:Number(b.routeCashLoaded);if(b.routeLoadTime!==undefined)job.routeLoadTime=b.routeLoadTime===null?undefined:String(b.routeLoadTime);await job.save();res.json(job);}catch(e){next(e)}});
 app.get('/api/location-areas',auth,async(req,res,next)=>{try{const areas=await Terminal.aggregate([{$match:{'official.locationArea':{$nin:[null,'']},'official.sourcePresent':true}},{$group:{_id:'$official.locationArea',terminals:{$sum:1},cities:{$addToSet:{$ifNull:['$official.city','$current.city']}}}},{$sort:{_id:1}}]);res.json(areas.map(a=>({name:a._id,terminals:a.terminals,cities:a.cities.filter(Boolean)})));}catch(e){next(e)}});
-app.get('/api/location-areas/:area/terminals',auth,async(req,res,next)=>{try{const areaParam=String(req.params.area);const areaList=areaParam.split(',').map(a=>a.trim()).filter(Boolean);const terminals=await Terminal.find({'official.locationArea':{$in:areaList},'official.sourcePresent':true}).select('terminalId official.status official.name official.locationArea official.wishAmount official.cashBalance official.lastWithdrawalAt official.city current.businessName current.address current.city').sort({'official.locationArea':1,'official.city':1,terminalId:1}).lean();const active=await AgentJob.find({terminalId:{$in:terminals.map(t=>t.terminalId)},status:{$nin:['approved','cancelled']}}).select('terminalId agent status dueAt').populate('agent','name').lean();const jobs=new Map(active.map(j=>[j.terminalId,j]));res.json(terminals.map(t=>({...t,current:{...t.current,city:t.current?.city||t.official?.city||''},requiredCash:Math.max(0,(t.official?.wishAmount||0)-(t.official?.cashBalance||0)),activeJob:jobs.get(t.terminalId)||null})));}catch(e){next(e)}});
+app.get('/api/location-areas/:area/terminals',auth,async(req,res,next)=>{try{const areaParam=String(req.params.area);const areaList=areaParam.split(',').map(a=>a.trim()).filter(Boolean);const terminals=await Terminal.find({'official.locationArea':{$in:areaList},'official.sourcePresent':true}).select('terminalId official.status official.tempName official.name official.locationArea official.wishAmount official.cashBalance official.lastWithdrawalAt official.city current.businessName current.address current.city').sort({'official.locationArea':1,'official.city':1,terminalId:1}).lean();const active=await AgentJob.find({terminalId:{$in:terminals.map(t=>t.terminalId)},status:{$nin:['approved','cancelled']}}).select('terminalId agent status dueAt').populate('agent','name').lean();const jobs=new Map(active.map(j=>[j.terminalId,j]));res.json(terminals.map(t=>({...t,current:{...t.current,city:t.current?.city||t.official?.city||''},requiredCash:Math.max(0,(t.official?.wishAmount||0)-(t.official?.cashBalance||0)),activeJob:jobs.get(t.terminalId)||null})));}catch(e){next(e)}});
 app.post('/api/jobs/dispatch',auth,permit('admin','manager','dispatch'),async(req,res,next)=>{try{const b=z.object({terminalId:z.string().min(2),agentId:z.string().min(2),cashToLoad:z.number().nonnegative(),dueAt:z.string().min(1),note:z.string().max(2000).optional(),localDate:z.string().optional()}).parse(req.body);const [terminal,agent]=await Promise.all([Terminal.findOne({terminalId:b.terminalId.toUpperCase()}),User.findOne({_id:b.agentId,role:'agent',active:true})]);if(!terminal)return res.status(404).json({message:'Terminal not found'});if(terminal.official?.status==='Inactive')return res.status(400).json({message:`Cannot dispatch job: Terminal ${terminal.terminalId} is currently Inactive. Please activate the terminal in Terminal Registry first.`});if(!agent)return res.status(400).json({message:'Selected agent is unavailable'});const terminalJob=await AgentJob.findOne({terminalId:terminal.terminalId,status:{$nin:['approved','cancelled']}}).populate('agent','name');if(terminalJob)return res.status(409).json({message:`${terminal.terminalId} is already assigned to ${terminalJob.agent?.name||'an agent'}. Complete and approve that job first.`});
 if(b.cashToLoad>0){
   let today, tomorrow;
@@ -151,9 +151,64 @@ app.get('/api/cash/withdrawals',auth,permit('admin','manager','ledger'),async(re
 app.delete('/api/cash/withdrawals/:id',auth,permit('admin'),async(req,res,next)=>{try{await CashWithdrawal.findByIdAndDelete(req.params.id);res.json({ok:true});}catch(e){next(e)}});
 
 // ── Cash Return (agent returns leftover cash) ───────────────────────────────
-app.post('/api/cash/return',auth,permit('admin','manager','ledger'),async(req,res,next)=>{try{const b=z.object({agentId:z.string().min(1),amount:z.number().min(0),jobIds:z.array(z.string()).optional(),note:z.string().max(500).optional(),date:z.string().optional()}).parse(req.body);const rec=await CashReturn.create({agent:b.agentId,amount:b.amount,jobIds:b.jobIds||[],note:b.note,recordedBy:req.user._id,date:b.date?new Date(b.date):new Date()});await audit(req,'CASH_RETURNED','CashReturn',rec.id,{amount:b.amount,agentId:b.agentId});res.status(201).json(rec);}catch(e){next(e)}});
+app.post('/api/cash/return',auth,permit('admin','manager','ledger'),async(req,res,next)=>{try{const b=z.object({agentId:z.string().min(1),amount:z.number().min(0),jobIds:z.array(z.string()).optional(),terminalId:z.string().optional(),note:z.string().max(500).optional(),date:z.string().optional()}).parse(req.body);const rec=await CashReturn.create({agent:b.agentId,amount:b.amount,jobIds:b.jobIds||[],terminalId:b.terminalId,note:b.note,recordedBy:req.user._id,date:b.date?new Date(b.date):new Date()});await audit(req,'CASH_RETURNED','CashReturn',rec.id,{amount:b.amount,agentId:b.agentId,terminalId:b.terminalId});res.status(201).json(rec);}catch(e){next(e)}});
 app.get('/api/cash/returns',auth,permit('admin','manager','ledger'),async(req,res,next)=>{try{const page=Math.max(1,+req.query.page||1),limit=20;const q={};if(req.query.agentId)q.agent=req.query.agentId;if(req.query.from)q.date={$gte:new Date(req.query.from+'T00:00:00')};if(req.query.to)q.date={...q.date,$lte:new Date(req.query.to+'T23:59:59.999')};const[items,total]=await Promise.all([CashReturn.find(q).sort({date:-1}).skip((page-1)*limit).limit(limit).populate('agent','name email').populate('recordedBy','name').populate('jobIds','terminalId businessName'),CashReturn.countDocuments(q)]);const sum=await CashReturn.aggregate([{$match:q},{$group:{_id:null,total:{$sum:'$amount'}}}]);res.json({items,total,pages:Math.ceil(total/limit),page,totalAmount:sum[0]?.total||0});}catch(e){next(e)}});
 app.delete('/api/cash/returns/:id',auth,permit('admin'),async(req,res,next)=>{try{await CashReturn.findByIdAndDelete(req.params.id);res.json({ok:true});}catch(e){next(e)}});
+
+app.get('/api/cash/agent-audit',auth,permit('admin','manager','ledger'),async(req,res,next)=>{
+  try{
+    const { agentId, from, to } = req.query;
+    if(!agentId) return res.status(400).json({message:'Agent ID is required'});
+    const dateQuery = {};
+    if(from) dateQuery.$gte = new Date(from+'T00:00:00');
+    if(to) dateQuery.$lte = new Date(to+'T23:59:59.999');
+
+    // Find jobs assigned in this period
+    const jobQuery = { agent: agentId, status: { $nin: ['cancelled'] } };
+    if(from||to) jobQuery.createdAt = dateQuery;
+    
+    const jobs = await AgentJob.find(jobQuery).sort({createdAt:-1});
+    
+    // Find returns in this period
+    const returnQuery = { agent: agentId };
+    if(from||to) returnQuery.date = dateQuery;
+    
+    const returns = await CashReturn.find(returnQuery).sort({date:-1}).populate('recordedBy','name');
+    
+    // Calculate summaries
+    let totalDispatched = 0;
+    let totalLoaded = 0;
+    let jobsApprovedCount = 0;
+    
+    jobs.forEach(j => {
+      totalDispatched += (j.cashToLoad || 0);
+      if(j.status === 'approved') {
+        jobsApprovedCount++;
+        // Find the cash_loaded event for actual loaded amount
+        const loadEvent = [...j.events].reverse().find(e=>e.status==='cash_loaded');
+        totalLoaded += Number(loadEvent?.cashLoaded ?? j.cashToLoad ?? 0);
+      }
+    });
+    
+    let totalReturned = returns.reduce((sum, r) => sum + r.amount, 0);
+    let netCashOut = totalDispatched - totalReturned;
+    let unaccounted = Math.max(0, totalDispatched - totalLoaded - totalReturned);
+
+    res.json({
+      summary: {
+        totalJobs: jobs.length,
+        jobsApproved: jobsApprovedCount,
+        totalDispatched,
+        totalLoaded,
+        totalReturned,
+        netCashOut,
+        unaccounted
+      },
+      jobs,
+      returns
+    });
+  }catch(e){next(e)}
+});
 
 // ── Cash available balance (today) ───────────────────────────────────────────
 app.get('/api/cash/available',auth,permit('admin','manager','ledger','dispatch','area'),async(req,res,next)=>{try{
