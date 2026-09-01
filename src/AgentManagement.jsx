@@ -60,7 +60,6 @@ export default function AgentManagement(){
 
   async function save(e){
     e.preventDefault();
-    if(!editing&&!picture)return setMsg('Profile picture is required.');
     setSaving(true);setMsg('');
     const body=new FormData();
     if(!editing){
@@ -134,7 +133,7 @@ export default function AgentManagement(){
             :editing?.profilePicture?.url
               ?<img src={editing.profilePicture.url} alt={editing.name}/>
               :<span>+</span>}
-          <div><b>{picture?.name||'Upload profile picture'}</b><small>JPG, PNG or WebP · max 5 MB</small></div>
+          <div><b>{picture?.name||'Upload profile picture (optional)'}</b><small>JPG, PNG or WebP · max 5 MB</small></div>
         </label>
         <div className="agent-fields">
           <label>Full Name<input required minLength="2" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label>
