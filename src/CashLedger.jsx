@@ -134,9 +134,9 @@ export default function CashLedger(){
             <span>{ledger.netCashOut>0?'Dispatched minus returned':'Surplus returned'}</span>
           </div>
           <div className="lstat purple">
-            <small>UNACCOUNTED</small>
-            <strong>{money(Math.max(0,ledger.totalDispatched-ledger.totalLoaded))}</strong>
-            <span>Given vs actually loaded</span>
+            <small>AVAILABLE IN VAULT / HAND</small>
+            <strong>{money(Math.max(0, ledger.totalWithdrawn - ledger.totalDispatched + ledger.totalReturned))}</strong>
+            <span>Withdrawn - Dispatched + Returned</span>
           </div>
         </div>
 

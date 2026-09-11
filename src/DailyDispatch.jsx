@@ -60,16 +60,33 @@ export default function DailyDispatch({done}){
       <p>One ATM can have only one open job. An agent may handle multiple different ATMs.</p>
 
       {/* Available balance banner */}
-      {bal&&<div className={'balance-banner '+(bal.available<=0?'balance-warn':'balance-ok')}>
-        <div>
-          <small>AVAILABLE CASH TODAY</small>
-          <strong>{money(bal.available)}</strong>
+      {bal&&<div className={'balance-banner '+(bal.available<=0?'balance-warn':'balance-ok')} style={{padding:'14px 18px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',width:'100%',flexWrap:'wrap',gap:10}}>
+          <div>
+            <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+              <small style={{letterSpacing:'0.5px',fontWeight:700}}>TOTAL AVAILABLE CASH</small>
+              {bal.withdrawn === 0 && (bal.previousBalance || 0) > 0 && (
+                <span style={{background:'#0369a1',color:'#fff',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:700}}>
+                  Using Previous Days' Cash
+                </span>
+              )}
+            </div>
+            <strong style={{fontSize:24,display:'block',marginTop:2}}>{money(bal.available)}</strong>
+          </div>
+          <div style={{fontSize:12,color:'inherit',opacity:.95,lineHeight:1.6,textAlign:'right'}}>
+            <div><b>Previous Days' Cash:</b> {money(bal.previousBalance || 0)}</div>
+            <div>
+              <b>Today Withdrawn:</b> {money(bal.withdrawn)} &nbsp;·&nbsp;
+              <b>Dispatched:</b> {money(bal.dispatched)} &nbsp;·&nbsp;
+              <b>Returned:</b> {money(bal.returned)}
+            </div>
+          </div>
         </div>
-        <div style={{fontSize:12,color:'inherit',opacity:.8,lineHeight:1.6}}>
-          Withdrawn {money(bal.withdrawn)} &nbsp;·&nbsp;
-          Dispatched {money(bal.dispatched)} &nbsp;·&nbsp;
-          Returned {money(bal.returned)}
-        </div>
+        {bal.withdrawn === 0 && (bal.previousBalance || 0) > 0 && (
+          <div style={{fontSize:12,marginTop:8,paddingTop:8,borderTop:'1px dashed rgba(255,255,255,0.3)',opacity:0.95}}>
+            ℹ️ Aaj bank se cash nahi nikala gaya ($0). Aap pichle dino ka bacha hua cash dispatch ke liye use kar sakte hain.
+          </div>
+        )}
       </div>}
 
       <form className="find-terminal" onSubmit={find}>

@@ -61,9 +61,61 @@ async function request(path,options={}){
 const money=v=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD',maximumFractionDigits:0}).format(v||0);
 
 function Login({done}){
-  const[form,setForm]=useState({email:'admin@example.com',password:'ChangeMe123!'}),[error,setError]=useState('');
-  async function submit(e){e.preventDefault();try{const d=await request('/auth/login',{method:'POST',body:JSON.stringify(form)});localStorage.setItem('token',d.token);localStorage.setItem('user',JSON.stringify(d.user));done(d.user)}catch(e){setError(e.message)}}
-  return <main className="login"><section className="brand-panel"><div className="mark">S</div><div><p className="eyebrow">Smart Access Solutions</p><h1>Every terminal.<br/>Exactly where it belongs.</h1><p>Operational visibility for your complete ATM fleet.</p></div><small>SECURE OPERATIONS PLATFORM · CANADA</small></section><form className="login-card" onSubmit={submit}><div><p className="eyebrow">WELCOME BACK</p><h2>Sign in to Command Center</h2><p className="muted">Use your organization credentials.</p></div><label>Email<input value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label><label>Password<input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label>{error&&<p className="error">{error}</p>}<button>Sign in securely <span>&#8594;</span></button><small className="muted">Protected by encrypted authentication and activity monitoring.</small></form></main>;
+  const[form,setForm]=useState({email:'admin@example.com',password:'ChangeMe123!'}),[error,setError]=useState(''),[loading,setLoading]=useState(false);
+  async function submit(e){
+    e.preventDefault();
+    if(loading) return;
+    setLoading(true);
+    setError('');
+    try{
+      const d=await request('/auth/login',{method:'POST',body:JSON.stringify(form)});
+      localStorage.setItem('token',d.token);
+      localStorage.setItem('user',JSON.stringify(d.user));
+      done(d.user);
+    }catch(e){
+      setError(e.message);
+      setLoading(false);
+    }
+  }
+  return <main className="login">
+    <section className="brand-panel">
+      <div className="mark">S</div>
+      <div>
+        <p className="eyebrow">Smart Access Solutions</p>
+        <h1>Every terminal.<br/>Exactly where it belongs.</h1>
+        <p>Operational visibility for your complete ATM fleet.</p>
+      </div>
+      <small>SECURE OPERATIONS PLATFORM · CANADA</small>
+    </section>
+    <form className="login-card" onSubmit={submit}>
+      <div>
+        <p className="eyebrow">WELCOME BACK</p>
+        <h2>Sign in to Command Center</h2>
+        <p className="muted">Use your organization credentials.</p>
+      </div>
+      <label>Email<input disabled={loading} value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label>
+      <label>Password<input disabled={loading} type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label>
+      {error&&<p className="error">{error}</p>}
+      <button type="submit" disabled={loading} className={loading ? 'btn-loading' : ''}>
+        {loading ? (
+          <>
+            <span className="btn-loading-text">
+              <i className="btn-spinner"></i>
+              Signing in securely...
+            </span>
+            <span className="login-loading-dots">
+              <span>.</span><span>.</span><span>.</span>
+            </span>
+          </>
+        ) : (
+          <>
+            Sign in securely <span>&#8594;</span>
+          </>
+        )}
+      </button>
+      <small className="muted">Protected by encrypted authentication and activity monitoring.</small>
+    </form>
+  </main>;
 }
 
 function playNotificationSound(type = 'default') {
@@ -142,7 +194,10 @@ function Shell(){
 
   useEffect(() => {
     if (!user) return;
-    const socket = io('/', { auth: { token: localStorage.getItem('token') } });
+    const socket = io('/', { 
+      auth: { token: localStorage.getItem('token') },
+      transports: ['websocket', 'polling']
+    });
     socket.on('terminal_alert', (data) => {
       playNotificationSound(data.type);
 
@@ -328,8 +383,22 @@ function Dashboard({go}){
     </div>
 
     <p className="eyebrow" style={{padding:'18px 0 8px',margin:0}}>TODAY'S CASH FLOW</p>
+    {(today.previousCash || 0) > 0 && (
+      <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:8,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:10,fontSize:13,color:'#1e40af'}}>
+        <span style={{fontSize:16}}>ℹ️</span>
+        <div>
+          <strong>Previous Days' Cash: {money(today.previousCash)}</strong>
+          {today.withdrawn === 0 ? ' — Aaj bank se cash nahi nikala gaya ($0). Aap pichle dino ka bacha hua cash use kar sakte hain.' : ''}
+          &nbsp;· <b>Total Available Now:</b> <span style={{fontWeight:800,color:'#0369a1'}}>{money(today.vaultAvailable ?? today.previousCash)}</span>
+        </div>
+      </div>
+    )}
     <div className="stats">
-      <article className="stat" style={{borderTop:'3px solid #3aaa68'}}><p>Withdrawn from bank</p><strong style={{color:'#267249'}}>{money(today.withdrawn||0)}</strong><small>Bank pulls today</small></article>
+      <article className="stat" style={{borderTop:'3px solid #3aaa68'}}>
+        <p>Withdrawn from bank</p>
+        <strong style={{color:'#267249'}}>{money(today.withdrawn||0)}</strong>
+        <small>{today.withdrawn===0 && (today.previousCash||0)>0 ? `Carried: ${money(today.previousCash)}` : 'Bank pulls today'}</small>
+      </article>
       <article className="stat" style={{borderTop:'3px solid #d2a437'}}><p>Dispatched to agents</p><strong style={{color:'#a07422'}}>{money(today.dispatched||0)}</strong><small>Assigned to agents</small></article>
       <article className="stat" style={{borderTop:'3px solid #4a7fd4'}}><p>Actually loaded</p><strong style={{color:'#2a5aaa'}}>{money(today.actualLoaded||0)}</strong><small>Approved jobs</small></article>
       <article className="stat" style={{borderTop:'3px solid #357064'}}><p>Returned by agents</p><strong style={{color:'#1e5040'}}>{money(today.returned||0)}</strong><small>Unspent cash back</small></article>

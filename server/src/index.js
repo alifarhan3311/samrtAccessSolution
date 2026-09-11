@@ -1,3 +1,7 @@
+const dns = require('dns');
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
+} catch (_) {}
 require('dotenv').config();
 const express = require('express'); const mongoose = require('mongoose'); const bcrypt = require('bcryptjs'); const crypto = require('crypto');
 const helmet = require('helmet'); const cors = require('cors'); const compression = require('compression'); const rateLimit = require('express-rate-limit'); const mongoSanitize = require('express-mongo-sanitize'); const multer = require('multer'); const { z } = require('zod');
@@ -36,7 +40,8 @@ app.get('/api/dashboard',auth,async(req,res,next)=>{try{
          todayReturned, monthReturned,
          openJobs, pendingApproval,
          agentStats,
-         openDiscrepancies, totalShortfall
+          openDiscrepancies, totalShortfall,
+          prevCashData
         ] = await Promise.all([
     Terminal.countDocuments(),
     Terminal.countDocuments({'official.status':'Active'}),
@@ -50,8 +55,8 @@ app.get('/api/dashboard',auth,async(req,res,next)=>{try{
     CashWithdrawal.aggregate([{$match:{date:{$gte:today}}},{$group:{_id:null,total:{$sum:'$amount'},count:{$sum:1}}}]).then(r=>r[0]||{total:0,count:0}),
     CashWithdrawal.aggregate([{$match:{date:{$gte:monthStart}}},{$group:{_id:null,total:{$sum:'$amount'},count:{$sum:1}}}]).then(r=>r[0]||{total:0,count:0}),
     // dispatched to agents (cashToLoad)
-    AgentJob.aggregate([{$match:{createdAt:{$gte:today}}},{$group:{_id:null,total:{$sum:'$cashToLoad'},count:{$sum:1}}}]).then(r=>r[0]||{total:0,count:0}),
-    AgentJob.aggregate([{$match:{createdAt:{$gte:monthStart}}},{$group:{_id:null,total:{$sum:'$cashToLoad'},count:{$sum:1}}}]).then(r=>r[0]||{total:0,count:0}),
+    AgentJob.aggregate([{$match:{createdAt:{$gte:today},status:{$nin:['cancelled']}}},{$group:{_id:null,total:{$sum:'$cashToLoad'},count:{$sum:1}}}]).then(r=>r[0]||{total:0,count:0}),
+    AgentJob.aggregate([{$match:{createdAt:{$gte:monthStart},status:{$nin:['cancelled']}}},{$group:{_id:null,total:{$sum:'$cashToLoad'},count:{$sum:1}}}]).then(r=>r[0]||{total:0,count:0}),
     // actual cash loaded (from approved jobs)
     AgentJob.aggregate([{$match:{status:'approved',approvedAt:{$gte:today}}},{$unwind:'$events'},{$match:{'events.status':'cash_loaded'}},{$group:{_id:null,total:{$sum:{$convert:{input:'$events.cashLoaded',to:'double',onError:0,onNull:0}}}}}]).then(r=>r[0]?.total||0),
     AgentJob.aggregate([{$match:{status:'approved',approvedAt:{$gte:monthStart}}},{$unwind:'$events'},{$match:{'events.status':'cash_loaded'}},{$group:{_id:null,total:{$sum:{$convert:{input:'$events.cashLoaded',to:'double',onError:0,onNull:0}}}}}]).then(r=>r[0]?.total||0),
@@ -65,14 +70,23 @@ app.get('/api/dashboard',auth,async(req,res,next)=>{try{
     AgentJob.aggregate([{$match:{createdAt:{$gte:monthStart}}},{$group:{_id:'$agent',jobsAssigned:{$sum:1},jobsApproved:{$sum:{$cond:[{$eq:['$status','approved']},1,0]}},totalDispatched:{$sum:'$cashToLoad'}}},{$lookup:{from:'users',localField:'_id',foreignField:'_id',as:'user'}},{$unwind:'$user'},{$project:{name:'$user.name',jobsAssigned:1,jobsApproved:1,totalDispatched:1}},{$sort:{totalDispatched:-1}},{$limit:10}]),
     CashDiscrepancy.countDocuments({status:'open'}),
     CashDiscrepancy.aggregate([{$match:{status:'open',discrepancy:{$gt:0}}},{$group:{_id:null,total:{$sum:'$discrepancy'}}}]).then(r=>r[0]?.total||0),
+    // previous cash in hand (strictly before today)
+    Promise.all([
+      CashWithdrawal.aggregate([{$match:{date:{$lt:today}}},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0),
+      AgentJob.aggregate([{$match:{createdAt:{$lt:today},status:{$nin:['cancelled']}}},{$group:{_id:null,total:{$sum:'$cashToLoad'}}}]).then(r=>r[0]?.total||0),
+      CashReturn.aggregate([{$match:{date:{$lt:today}}},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0),
+    ]).then(([w,d,r])=>Math.max(0,w-d+r))
   ]);
+
+  const previousCash = prevCashData || 0;
+  const vaultAvailable = previousCash + todayWithdrawals.total - todayDispatched.total + todayReturned.total;
 
   res.json({
     fleet:{ total, active, inactive, inventory, alerts, setupRequired, totalCashInMachines },
     cities,
     cash:{
       today:{ withdrawn:todayWithdrawals.total, dispatched:todayDispatched.total, actualLoaded:todayActualLoaded, returned:todayReturned.total,
-              balance:todayDispatched.total-todayReturned.total },
+              previousCash, vaultAvailable, balance:todayDispatched.total-todayReturned.total },
       month:{ withdrawn:monthWithdrawals.total, dispatched:monthDispatched.total, actualLoaded:monthActualLoaded, returned:monthReturned.total,
               netCashOut:monthDispatched.total-monthReturned.total }
     },
@@ -224,15 +238,43 @@ app.get('/api/cash/available',auth,permit('admin','manager','ledger','dispatch',
     today=new Date(); today.setHours(0,0,0,0);
     tomorrow=new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
   }
-  const dq={date:{$gte:today,$lt:tomorrow}};
-  const jq={createdAt:{$gte:today,$lt:tomorrow}};
-  const[withdrawn,dispatched,returned]=await Promise.all([
-    CashWithdrawal.aggregate([{$match:dq},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0),
-    AgentJob.aggregate([{$match:jq},{$group:{_id:null,total:{$sum:'$cashToLoad'}}}]).then(r=>r[0]?.total||0),
-    CashReturn.aggregate([{$match:dq},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0),
+
+  // Previous days queries (before today)
+  const dqPrev = { date: { $lt: today } };
+  const jqPrev = { createdAt: { $lt: today }, status: { $nin: ['cancelled'] } };
+
+  // Today queries
+  const dqToday = { date: { $gte: today, $lt: tomorrow } };
+  const jqToday = { createdAt: { $gte: today, $lt: tomorrow }, status: { $nin: ['cancelled'] } };
+
+  const [
+    prevWithdrawn,
+    prevDispatched,
+    prevReturned,
+    todayWithdrawn,
+    todayDispatched,
+    todayReturned
+  ] = await Promise.all([
+    CashWithdrawal.aggregate([{$match:dqPrev},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0),
+    AgentJob.aggregate([{$match:jqPrev},{$group:{_id:null,total:{$sum:'$cashToLoad'}}}]).then(r=>r[0]?.total||0),
+    CashReturn.aggregate([{$match:dqPrev},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0),
+    CashWithdrawal.aggregate([{$match:dqToday},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0),
+    AgentJob.aggregate([{$match:jqToday},{$group:{_id:null,total:{$sum:'$cashToLoad'}}}]).then(r=>r[0]?.total||0),
+    CashReturn.aggregate([{$match:dqToday},{$group:{_id:null,total:{$sum:'$amount'}}}]).then(r=>r[0]?.total||0),
   ]);
-  const available=withdrawn-dispatched+returned;
-  res.json({withdrawn,dispatched,returned,available,date:today});
+
+  const previousBalance = Math.max(0, prevWithdrawn - prevDispatched + prevReturned);
+  const available = previousBalance + todayWithdrawn - todayDispatched + todayReturned;
+
+  res.json({
+    previousBalance,
+    withdrawn: todayWithdrawn,
+    dispatched: todayDispatched,
+    returned: todayReturned,
+    available,
+    totalWithdrawnAllTime: prevWithdrawn + todayWithdrawn,
+    date: today
+  });
 }catch(e){next(e)}});
 
 // ── Cash Ledger summary ──────────────────────────────────────────────────────
@@ -799,22 +841,35 @@ app.get('/api/atm/timeline/:terminalId', auth, permit('admin', 'agent', 'atm'), 
 });
 
 app.use((err,req,res,next)=>{console.error(err);if(err.name==='ZodError')return res.status(400).json({message:'Validation failed',issues:err.issues});res.status(500).json({message:'An unexpected error occurred',...(process.env.NODE_ENV!=='production'?{detail:err.message}:{})});});
+const DIRECT_FALLBACK_URI = 'mongodb://alifarhan1531_db_user:7xGQZLnTXzjvzYuZ@ac-bpdgjhs-shard-00-00.lzr6fas.mongodb.net:27017,ac-bpdgjhs-shard-00-01.lzr6fas.mongodb.net:27017,ac-bpdgjhs-shard-00-02.lzr6fas.mongodb.net:27017/atm-command-center?ssl=true&replicaSet=atlas-acxa51-shard-0&authSource=admin&retryWrites=true&w=majority';
+
+async function connectToMongo(uri, options = {}) {
+  try {
+    await mongoose.connect(uri || process.env.MONGODB_URI, options);
+  } catch (err) {
+    console.warn('Initial MongoDB connection error:', err.message, '- trying fallback connection...');
+    await mongoose.connect(DIRECT_FALLBACK_URI, options);
+  }
+}
+
 async function start(){
-  await mongoose.connect(process.env.MONGODB_URI);
-  const email=process.env.ADMIN_EMAIL?.toLowerCase();
-  if(email&&!await User.exists({email}))await User.create({name:'Administrator',email,passwordHash:await bcrypt.hash(process.env.ADMIN_PASSWORD,12),role:'admin'});
   const server = require('http').createServer(app);
   const io = new (require('socket.io').Server)(server, { cors: { origin: process.env.CLIENT_ORIGIN?.split(',') || '*' } });
   app.locals.io = io;
   io.on('connection', (socket) => { console.log('Socket.IO Client connected:', socket.id); socket.on('disconnect', () => console.log('Socket.IO Client disconnected:', socket.id)); });
-  server.listen(process.env.PORT||4000,'localhost',()=>console.log(`API ready on ${process.env.PORT||4000}`));
+  const PORT = process.env.PORT || 4000;
+  server.listen(PORT, '0.0.0.0', () => console.log(`API ready on ${PORT}`));
+
+  await connectToMongo(process.env.MONGODB_URI);
+  const email=process.env.ADMIN_EMAIL?.toLowerCase();
+  if(email&&!await User.exists({email}))await User.create({name:'Administrator',email,passwordHash:await bcrypt.hash(process.env.ADMIN_PASSWORD,12),role:'admin'});
 } 
 if(require.main===module)start().catch(e=>{console.error(e);process.exit(1)});
 
 // Vercel serverless handler
 async function connectDB() {
   if (mongoose.connection.readyState === 1) return; // already connected
-  await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 8000 });
+  await connectToMongo(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 8000 });
   const email = process.env.ADMIN_EMAIL?.toLowerCase();
   if (email && !await User.exists({ email })) {
     await User.create({ name: 'Administrator', email, passwordHash: await bcrypt.hash(process.env.ADMIN_PASSWORD, 12), role: 'admin' });

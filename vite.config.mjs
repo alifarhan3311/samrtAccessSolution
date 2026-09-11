@@ -9,12 +9,22 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:5322',
+        target: 'http://127.0.0.1:5322',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:5322',
+        target: 'http://127.0.0.1:5322',
+        changeOrigin: true,
         ws: true,
+        configure: (proxy) => {
+          proxy.on('error', (err, _req, _res) => {
+            if (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET') {
+              // Ignore temporary socket reconnect attempts while server reboots
+              return;
+            }
+            console.error('[vite socket proxy error]:', err.message);
+          });
+        },
       },
     },
   },
