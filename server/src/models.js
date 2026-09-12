@@ -14,10 +14,10 @@ const assignmentSchema = new mongoose.Schema({
 const terminalSchema = new mongoose.Schema({
   terminalId: { type: String, required: true, unique: true, uppercase: true, trim: true, index: true },
   official: {
-    status: { type: String, enum: ['Active', 'Inactive', 'Unknown'], default: 'Unknown' },
+    status: { type: String, enum: ['Active', 'Inactive', 'Spare', 'Pending', 'Unknown'], default: 'Unknown' },
     tempName: String, name: String, address: String, city: String, locationArea: { type: String, index: true },
-    wishAmount: Number, cashBalance: Number, cashLoading: Number, agent: String, notesTask: String,
-    lastCommunication: String, lastWithdrawalAt: Date, sourcePresent: { type: Boolean, default: true },
+    wishAmount: Number, cashBalance: Number, cashLoading: Number, agent: String, notesTask: String, notes: String,
+    lastCommunication: String, lastWithdrawalAt: Date, lastWithdrawalDate: String, sourcePresent: { type: Boolean, default: true },
     // Terminal Management file fields
     lastTransData: String, lastTransTime: Date,
     totalCassetteValue: Number, totalCassetteCount: Number,

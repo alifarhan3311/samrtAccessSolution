@@ -3,7 +3,14 @@ const { Terminal, ImportRun, AgentJob, CashDiscrepancy } = require('./models');
 
 const clean  = v => v == null ? '' : String(v).trim();
 const num    = v => { const n = Number(String(v).replace(/[$,\s]/g, '')); return Number.isFinite(n) ? n : undefined; };
-const status = v => /^active$/i.test(clean(v)) ? 'Active' : /^inactive$/i.test(clean(v)) ? 'Inactive' : 'Unknown';
+const status = v => {
+  const c = clean(v).toLowerCase();
+  if (/^inact/i.test(c)) return 'Inactive';
+  if (/^act/i.test(c)) return 'Active';
+  if (/^spare/i.test(c)) return 'Spare';
+  if (/^pend/i.test(c)) return 'Pending';
+  return 'Active';
+};
 const date   = v => { if (!v) return undefined; const d = v instanceof Date ? v : new Date(v); return Number.isNaN(d.getTime()) ? undefined : d; };
 
 function findHeader(rows) {
@@ -67,16 +74,55 @@ async function checkDiscrepancies(terminalId, terminalObjId, newCashBalance, run
  * Returns only the fields this file provides — everything else is left untouched.
  */
 function extractCanadaStatus(row, headers) {
+  const st = status(pick(row, headers, [/^status$/i]));
+
+  const rawComm = pick(row, headers, [/last\s*comm/i]);
+  let commStr = '';
+  if (rawComm instanceof Date && !isNaN(rawComm.getTime())) {
+    const mm = String(rawComm.getMonth() + 1).padStart(2, '0');
+    const dd = String(rawComm.getDate()).padStart(2, '0');
+    const yy = String(rawComm.getFullYear()).slice(-2);
+    const hh = String(rawComm.getHours()).padStart(2, '0');
+    const min = String(rawComm.getMinutes()).padStart(2, '0');
+    commStr = `${mm}/${dd}/${yy} ${hh}:${min}`;
+  } else {
+    commStr = clean(rawComm);
+  }
+
+  const rawWithdrawal = pick(row, headers, [/last\s*withdrawal/i]);
+  let withdrawalDate = undefined;
+  let withdrawalStr = clean(rawWithdrawal);
+  if (rawWithdrawal instanceof Date && !isNaN(rawWithdrawal.getTime())) {
+    withdrawalDate = rawWithdrawal;
+    withdrawalStr = rawWithdrawal.toISOString().slice(0, 10);
+  } else if (withdrawalStr && !/^(n\/?a|none|nil)$/i.test(withdrawalStr)) {
+    const d = new Date(withdrawalStr);
+    if (!isNaN(d.getTime())) {
+      withdrawalDate = d;
+    }
+  }
+
+  const wishAmountVal = num(pick(row, headers, [/wish\s*amount/i, /^wish$/i]));
+
   return {
-    name:              clean(pick(row, headers, [/^name$/i, /business/i])),
-    address:           clean(pick(row, headers, [/address/i])),
-    cashBalance:       num(pick(row, headers, [/cash\s*balance/i, /^balance$/i])),
-    lastError:         clean(pick(row, headers, [/last\s*error/i])),
-    lastCommunication: clean(pick(row, headers, [/last\s*comm/i])),
-    lastWithdrawalAt:  date(pick(row, headers, [/last\s*withdrawal/i])),
-    locationArea:      clean(pick(row, headers, [/location\s*area/i])),
-    sourcePresent:     true,
-    lastSyncedAt:      new Date(),
+    status:             st,
+    tempName:           clean(pick(row, headers, [/temp\s*name/i])),
+    name:               clean(pick(row, headers, [/^name$/i, /business/i, /location\s*name/i])),
+    address:            clean(pick(row, headers, [/address/i])),
+    city:               clean(pick(row, headers, [/^city$/i])),
+    locationArea:       clean(pick(row, headers, [/location\s*area/i])),
+    wishAmount:         wishAmountVal,
+    cashBalance:        num(pick(row, headers, [/cash\s*balance/i, /^balance$/i])),
+    cashLoading:        num(pick(row, headers, [/cash\s*loading/i, /cash\s*load/i])),
+    agent:              clean(pick(row, headers, [/^agent$/i])),
+    notesTask:          clean(pick(row, headers, [/notes?\s*\/\s*task/i, /^task$/i])),
+    notes:              clean(pick(row, headers, [/^notes?$/i])),
+    lastError:          clean(pick(row, headers, [/last\s*error/i])),
+    lastCommunication:  commStr,
+    lastWithdrawalAt:   withdrawalDate,
+    lastWithdrawalDate: withdrawalStr,
+    sourcePresent:      true,
+    lastSyncedAt:       new Date(),
   };
 }
 
@@ -166,12 +212,12 @@ async function importWorkbook(buffer, fileName, userId, io) {
     if (!existing) {
       // New terminal
       const officialDoc = {
-        status: 'Unknown', name: '', address: '', city: '', locationArea: '',
+        status: extracted.status || 'Active', name: '', address: '', city: '', locationArea: '',
         sourcePresent: true, lastSyncedAt: new Date(),
         ...extracted, raw,
       };
 
-      const needsSetup = !officialDoc.wishAmount || officialDoc.wishAmount <= 0;
+      const needsSetup = officialDoc.status === 'Active' && (!officialDoc.wishAmount || officialDoc.wishAmount <= 0);
 
       const newDoc = {
         terminalId,
@@ -188,6 +234,10 @@ async function importWorkbook(buffer, fileName, userId, io) {
         },
         setupRequired: needsSetup,
         setupReason:   needsSetup ? 'New terminal requires Wish Amount and operational setup' : undefined,
+        alert: {
+          enabled: Boolean(officialDoc.wishAmount && officialDoc.wishAmount > 0),
+          threshold: officialDoc.wishAmount || 0,
+        }
       };
 
       bulkOps.push({ insertOne: { document: newDoc } });

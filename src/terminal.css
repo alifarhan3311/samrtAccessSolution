@@ -30,6 +30,8 @@
 .status-select { border: 1px solid #d8ded9; border-radius: 20px; padding: 6px 28px 6px 10px; font-weight: 700; background: #e9ece9; cursor: pointer; }
 .status-select.active   { background: #dff3e6; color: #267249; }
 .status-select.inactive { background: #f0e5e2; color: #955246; }
+.status-select.spare    { background: #fef3c7; color: #92400e; }
+.status-select.pending  { background: #e0f2fe; color: #075985; }
 .current-head { background: #eaf2df !important; color: #2d584a !important; }
 .current-location { min-width: 260px; background: #f8fbf5; }
 .current-location b, .current-location small { display: block; }
@@ -234,4 +236,196 @@
   color: #9aa39e;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+/* ── Filter Pills & Toolbar ────────────────────────────────────── */
+.tr-filter-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.tr-status-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.tr-pill {
+  border: 1px solid #d8dfda;
+  background: #fff;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .15s ease;
+  color: #33413c;
+}
+.tr-pill:hover {
+  background: #f4f7f4;
+  border-color: #183d36;
+}
+.tr-pill.active {
+  background: #183d36;
+  color: #fff;
+  border-color: #183d36;
+}
+.tr-pill-count {
+  background: rgba(0,0,0,0.08);
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+.tr-pill.active .tr-pill-count {
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+}
+
+.tr-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+.tr-search-box {
+  flex: 1;
+  min-width: 260px;
+  position: relative;
+}
+.tr-search-box input {
+  width: 100%;
+  padding: 10px 14px 10px 36px;
+  border: 1px solid #d8dfda;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+  box-sizing: border-box;
+}
+.tr-search-box .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8a938e;
+  font-size: 14px;
+  pointer-events: none;
+}
+.tr-dropdown-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tr-dropdown-filters select {
+  padding: 9px 12px;
+  border: 1px solid #d8dfda;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+  font-weight: 600;
+  color: #2d3c38;
+  cursor: pointer;
+}
+.tr-clear-btn {
+  background: #f1f4f1;
+  border: 1px solid #d8dfda;
+  color: #4b5563;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tr-clear-btn:hover {
+  background: #e2e8e2;
+  color: #111;
+}
+
+/* ── Sortable Table Headers ────────────────────────────────────── */
+.tr-sortable-th {
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s;
+}
+.tr-sortable-th:hover {
+  background: #e6ede6 !important;
+}
+.tr-sortable-th-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.tr-sort-icon {
+  font-size: 11px;
+  opacity: 0.4;
+}
+.tr-sort-icon.active {
+  opacity: 1;
+  color: #183d36;
+  font-weight: 800;
+}
+
+/* ── Pagination Bar ────────────────────────────────────────────── */
+.tr-pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 4px 8px;
+  font-size: 13px;
+  color: #4b5563;
+}
+.tr-page-info b {
+  color: #111827;
+}
+.tr-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tr-page-btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid #d8dfda;
+  background: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
+  color: #2d3c38;
+}
+.tr-page-btn:hover:not(:disabled) {
+  background: #f0f4f0;
+  border-color: #183d36;
+}
+.tr-page-btn.active {
+  background: #183d36;
+  color: #fff;
+  border-color: #183d36;
+}
+.tr-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tr-page-size-select {
+  padding: 6px 10px;
+  border: 1px solid #d8dfda;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fff;
+  color: #2d3c38;
+  margin-left: 8px;
 }
