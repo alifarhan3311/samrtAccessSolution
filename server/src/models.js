@@ -52,7 +52,8 @@ const agentJobSchema = new mongoose.Schema({
   businessName: String, address: String, city: String, wishAmount: { type: Number, min: 0, default: 0 }, cashToLoad: { type: Number, min: 0, required: true },
   dueAt: { type: Date, required: true, index: true }, status: { type: String, enum: ['assigned','accepted','travelling','cash_loaded','issue_reported','approved','cancelled'], default: 'assigned', index: true },
   events: [jobEventSchema], approvedAt: Date, approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  routeExistingCash: Number, routeCashLoaded: Number, routeLoadTime: String
+  routeExistingCash: Number, routeCashLoaded: Number, routeLoadTime: String,
+  routeBillsRemaining: Number, routeCashToLoad: Number
 }, { timestamps: true });
 
 // Cash withdrawn from bank by admin

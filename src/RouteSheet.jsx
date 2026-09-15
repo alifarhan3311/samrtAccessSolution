@@ -295,7 +295,15 @@ export default function RouteSheet() {
                               <span style={{ fontSize: '11px', color: '#444' }}>{address} · {city}</span>
                             </td>
                             <td style={{ textAlign: 'center' }}>{status}</td>
-                            <td style={{ textAlign: 'center' }}>{remain}</td>
+                            <td className="rs-blank-cell p-0">
+                              <input 
+                                className="rs-input" 
+                                type="number" 
+                                value={job.routeBillsRemaining ?? remain ?? ''}
+                                onChange={e => handleInputChange(gIdx, jIdx, 'routeBillsRemaining', e.target.value)}
+                                onBlur={e => handleUpdateJob(job._id, 'routeBillsRemaining', e.target.value)}
+                              />
+                            </td>
                             <td className="rs-blank-cell p-0">
                               <input 
                                 className="rs-input" 
@@ -305,7 +313,15 @@ export default function RouteSheet() {
                                 onBlur={e => handleUpdateJob(job._id, 'routeExistingCash', e.target.value)}
                               />
                             </td>
-                            <td style={{ textAlign: 'center' }}>{load}</td>
+                            <td className="rs-blank-cell p-0">
+                              <input 
+                                className="rs-input" 
+                                type="number" 
+                                value={job.routeCashToLoad ?? load ?? ''}
+                                onChange={e => handleInputChange(gIdx, jIdx, 'routeCashToLoad', e.target.value)}
+                                onBlur={e => handleUpdateJob(job._id, 'routeCashToLoad', e.target.value)}
+                              />
+                            </td>
                             <td className="rs-blank-cell p-0">
                               <input 
                                 className="rs-input" 
