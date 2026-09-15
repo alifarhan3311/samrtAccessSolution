@@ -169,7 +169,7 @@ app.get('/api/location-areas/:area/terminals',auth,async(req,res,next)=>{try{
   } else {
     areaMatch['official.locationArea'] = { $in: actualAreas };
   }
-  const terminals=await Terminal.find({...areaMatch,'official.sourcePresent':true}).select('terminalId official.status official.tempName official.name official.locationArea official.wishAmount official.cashBalance official.lastWithdrawalAt official.city current.businessName current.address current.city').sort({'official.locationArea':1,'official.city':1,terminalId:1}).lean();
+  const terminals=await Terminal.find({...areaMatch,'official.sourcePresent':true}).select('terminalId official.status official.tempName official.name official.locationArea official.wishAmount official.cashBalance official.lastWithdrawalAt official.lastCommunication official.city current.businessName current.address current.city').sort({'official.locationArea':1,'official.city':1,terminalId:1}).lean();
   const jobQuery={terminalId:{$in:terminals.map(t=>t.terminalId)},status:{$nin:['approved','cancelled']}};
   if(req.query.date){
     const dateStr=String(req.query.date).split('T')[0];

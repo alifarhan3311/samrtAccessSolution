@@ -317,12 +317,27 @@ export default function AreaDispatch({done}){
           const currentBills=Math.floor(currentCad/20);
           const assignedAgent=agentOverrides[t.terminalId]||form.agentId||'';
 
-          return <div key={t.terminalId} className={`area-atm-row ${isDisabled?'locked-atm':''}`}>
+          let isDisconnected = false;
+          if (t.official?.lastCommunication) {
+            // some formats are "12/25/25 01:47", JS Date parser can handle them
+            const commDate = new Date(t.official.lastCommunication);
+            if (!isNaN(commDate.getTime())) {
+              const diffHours = (new Date() - commDate) / (1000 * 60 * 60);
+              if (diffHours > 72) {
+                isDisconnected = true;
+              }
+            }
+          }
+
+          return <div key={t.terminalId} className={`area-atm-row ${isDisabled?'locked-atm':''}`} style={isDisconnected ? { background: '#fef2f2', border: '1px solid #f87171', borderLeft: '5px solid #ef4444' } : {}}>
             <input type="checkbox" disabled={isDisabled} checked={isSelected} onChange={()=>toggle(t.terminalId)}/>
             <div>
               <b>{t.terminalId} · {t.official?.tempName || t.official?.name} {isInactive&&<span style={{color:'#a63e36',fontSize:11,fontWeight:800,marginLeft:6}}>(INACTIVE)</span>}</b>
               <span>{t.current?.address||t.official?.address} · {t.current?.city||t.official?.city} &nbsp; <span style={{background:'#edf2f0',padding:'1px 6px',borderRadius:8,fontWeight:700,fontSize:10,color:'#357064'}}>{t.official?.locationArea}</span></span>
-              <span style={{marginTop:2}}>Last Withdrawal: <strong style={{color:'#183d36'}}>{fmt(t.official?.lastWithdrawalAt)}</strong></span>
+              <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, color: '#555' }}>
+                <span>Last Withdrawal: <strong style={{color:'#183d36'}}>{fmt(t.official?.lastWithdrawalAt)}</strong></span>
+                <span>Last Comm: <strong style={{color: isDisconnected ? '#dc2626' : '#183d36'}}>{t.official?.lastCommunication || 'N/A'}</strong></span>
+              </div>
             </div>
             <section>
               <small>WISH / BALANCE</small>
