@@ -46,6 +46,9 @@ export default function RouteSheet() {
   const [loading, setLoading] = useState(false);
   const [ticketsLoading, setTicketsLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const [reassigningId, setReassigningId] = useState(null);
+  const [newAgentId, setNewAgentId] = useState('');
 
   useEffect(() => {
     if (!isAgent) {
@@ -152,6 +155,27 @@ export default function RouteSheet() {
     } catch (e) { alert(e.message); }
   };
 
+  const cancelJob = async (id) => {
+    if(!confirm('Cancel this job? The ATM will be removed from this route and become available for dispatch again.')) return;
+    try {
+      await json(`/route-sheet/${id}`, { method: 'DELETE' });
+      loadData();
+    } catch (e) { alert(e.message); }
+  };
+
+  const saveReassign = async (id) => {
+    if(!newAgentId) return alert('Please select a new agent');
+    try {
+      await json(`/route-sheet/${id}/reassign`, {
+        method: 'PATCH',
+        body: JSON.stringify({ agentId: newAgentId })
+      });
+      setReassigningId(null);
+      setNewAgentId('');
+      loadData();
+    } catch (e) { alert(e.message); }
+  };
+
   let totalRemaining = 0;
   let totalToLoad = 0;
   groups.forEach(g => {
@@ -236,20 +260,21 @@ export default function RouteSheet() {
               <table className="rs-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '35%' }}>DBA Name and Address</th>
+                    <th style={{ width: '30%' }}>DBA Name and Address</th>
                     <th style={{ width: '8%' }}>Terminal<br/>Status</th>
-                    <th style={{ width: '10%' }}>Bills<br/>Remainin</th>
-                    <th style={{ width: '11%' }}>Existing<br/>Cash</th>
-                    <th style={{ width: '10%' }}>To Be<br/>Load</th>
-                    <th style={{ width: '14%' }}>Cash<br/>Loaded</th>
-                    <th style={{ width: '12%' }}>Load<br/>Time</th>
+                    <th style={{ width: '9%' }}>Bills<br/>Remainin</th>
+                    <th style={{ width: '10%' }}>Existing<br/>Cash</th>
+                    <th style={{ width: '9%' }}>To Be<br/>Load</th>
+                    <th style={{ width: '12%' }}>Cash<br/>Loaded</th>
+                    <th style={{ width: '11%' }}>Load<br/>Time</th>
+                    <th className="no-print" style={{ width: '11%' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {groups.map((group, gIdx) => (
                     <React.Fragment key={group.area}>
                       <tr className="rs-area-row">
-                        <td colSpan="7" style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '15px', background: '#f4f4f4' }}>
+                        <td colSpan="8" style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '15px', background: '#f4f4f4' }}>
                           {group.area.toUpperCase()}
                         </td>
                       </tr>
@@ -299,6 +324,29 @@ export default function RouteSheet() {
                                 onChange={e => handleInputChange(gIdx, jIdx, 'routeLoadTime', e.target.value)}
                                 onBlur={e => handleUpdateJob(job._id, 'routeLoadTime', e.target.value)}
                               />
+                            </td>
+                            <td className="no-print" style={{ textAlign: 'center' }}>
+                              {reassigningId === job._id ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  <select 
+                                    value={newAgentId} 
+                                    onChange={e => setNewAgentId(e.target.value)}
+                                    style={{ padding: '2px 4px', fontSize: '11px', width: '100%' }}
+                                  >
+                                    <option value="">Select Agent...</option>
+                                    {agents.map(a => <option key={a._id} value={a._id}>{a.name}</option>)}
+                                  </select>
+                                  <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                    <button onClick={() => saveReassign(job._id)} style={{ fontSize: '11px', padding: '2px 4px', background: '#183d36', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}>Save</button>
+                                    <button onClick={() => {setReassigningId(null); setNewAgentId('');}} style={{ fontSize: '11px', padding: '2px 4px', background: '#eee', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer' }}>Cancel</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                                  <button onClick={() => setReassigningId(job._id)} title="Reassign Agent" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}>🔄</button>
+                                  <button onClick={() => cancelJob(job._id)} title="Cancel Job" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#dc2626' }}>❌</button>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         );

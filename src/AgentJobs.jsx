@@ -284,7 +284,7 @@ export default function AgentJobs({ role }) {
                             {actionLoading === `approve_${job._id}` ? 'Approving...' : '✓ Approve'}
                           </button>
                         )}
-                        {!admin && !['approved', 'cash_loaded'].includes(job.status) && (
+                        {!['approved', 'cancelled'].includes(job.status) && (
                           <button 
                             className="aj-btn-primary" 
                             style={{ padding: '4px 10px', fontSize: '11px' }}
@@ -327,6 +327,7 @@ export default function AgentJobs({ role }) {
       {updating && (
         <JobUpdate
           job={updating}
+          admin={admin}
           close={() => setUpdating(null)}
           saved={afterUpdate}
         />
@@ -407,7 +408,7 @@ function JobDetailModal({ job, admin, onClose, onApprove, onProof, onUpdate }) {
 
         {/* Actions */}
         <div className="aj-dm-actions">
-          {!admin && !['approved', 'cash_loaded'].includes(job.status) && (
+          {!['approved', 'cancelled'].includes(job.status) && (
             <button className="aj-btn-primary" onClick={onUpdate}>
               Update job / report issue
             </button>
@@ -432,10 +433,14 @@ function JobDetailModal({ job, admin, onClose, onApprove, onProof, onUpdate }) {
 }
 
 /* ── Job Update Modal ─────────────────────────────────────────────────────── */
-function JobUpdate({ job, close, saved }) {
-  const [status, setStatus] = useState(job.status === 'assigned' ? 'accepted' : 'travelling');
+function JobUpdate({ job, admin, close, saved }) {
+  const [status, setStatus] = useState(
+    ['accepted', 'travelling', 'cash_loaded', 'issue_reported'].includes(job.status)
+      ? job.status
+      : (job.status === 'assigned' ? 'accepted' : 'travelling')
+  );
   const [note,   setNote]   = useState('');
-  const [cash,   setCash]   = useState(job.cashToLoad);
+  const [cash,   setCash]   = useState(job.cashToLoad ?? '');
   const [files,  setFiles]  = useState([]);
   const [error,  setError]  = useState('');
 
@@ -466,7 +471,7 @@ function JobUpdate({ job, close, saved }) {
     <div className="overlay">
       <form className="job-modal" onSubmit={send}>
         <button type="button" className="close" onClick={close}>×</button>
-        <p className="eyebrow">AGENT FIELD UPDATE</p>
+        <p className="eyebrow">{admin ? 'ADMIN UPDATE' : 'AGENT FIELD UPDATE'}</p>
         <h3>{job.terminalId}</h3>
         <label>Status
           <select value={status} onChange={e => setStatus(e.target.value)}>
@@ -490,15 +495,14 @@ function JobUpdate({ job, close, saved }) {
             placeholder="Describe work completed or issue in detail…"
           />
         </label>
-        <label>Proof photos / PDF
+        <label>Proof photos / PDF (Optional)
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp,application/pdf"
             multiple
-            required={status === 'cash_loaded'}
             onChange={e => setFiles(e.target.files)}
           />
-          <small>Up to 4 files, 8 MB each.</small>
+          <small>Optional. Up to 4 files, 8 MB each.</small>
         </label>
         {error && <p className="error">{error}</p>}
         <button type="submit">Submit secure update →</button>

@@ -6,6 +6,12 @@ const fmt=v=>v?new Date(v).toLocaleDateString('en-CA'):'N/A';
 
 import DailyDispatch from './DailyDispatch.jsx';
 
+const getTodayLocal = () => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().split('T')[0];
+};
+
 export default function AreaDispatch({done}){
   const[areas,setAreas]=useState([]);
   const[agents,setAgents]=useState([]);
@@ -15,7 +21,7 @@ export default function AreaDispatch({done}){
   const[cashOverrides,setCashOverrides]=useState({});
   const[agentOverrides,setAgentOverrides]=useState({});
   const[noteOverrides,setNoteOverrides]=useState({});
-  const[form,setForm]=useState({agentId:'',dueAt:'',note:''});
+  const[form,setForm]=useState({agentId:'',dueAt:getTodayLocal(),note:''});
   const[msg,setMsg]=useState('');
   const[bal,setBal]=useState(null);
   const[loadingTerminals,setLoadingTerminals]=useState(false);
@@ -23,19 +29,24 @@ export default function AreaDispatch({done}){
   const[showSingleDispatch, setShowSingleDispatch] = useState(false);
 
   useEffect(()=>{
-    const ld=new Date();const localDate=`${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
-    Promise.all([req('/location-areas'),req('/users/agents'),req(`/cash/available?localDate=${localDate}`).catch(()=>null)])
+    const localDate=getTodayLocal();
+    Promise.all([
+      req('/location-areas'),
+      req(`/users/agents?date=${localDate}`),
+      req(`/cash/available?localDate=${localDate}`).catch(()=>null)
+    ])
       .then(([a,g,b])=>{setAreas(a);setAgents(g);if(b)setBal(b);})
       .finally(()=>setInitialLoading(false));
   },[]);
 
-  async function loadTerminalsForAreas(areaList){
+  async function loadTerminalsForAreas(areaList, targetDate = form.dueAt){
     setSelectedAreas(areaList);setSelected([]);setTerminals([]);setCashOverrides({});setAgentOverrides({});setNoteOverrides({});setMsg('');
     if(!areaList.length)return;
     setLoadingTerminals(true);
     try{
       const param=encodeURIComponent(areaList.join(','));
-      const items=await req('/location-areas/'+param+'/terminals');
+      const dateParam=targetDate ? `?date=${encodeURIComponent(targetDate)}` : '';
+      const items=await req('/location-areas/'+param+'/terminals'+dateParam);
       setTerminals(items);
       const activeIds=items.filter(t=>!t.activeJob&&t.official?.status!=='Inactive').map(t=>t.terminalId);
       setSelected(activeIds);
@@ -54,6 +65,16 @@ export default function AreaDispatch({done}){
       setMsg(e.message);
     }finally{
       setLoadingTerminals(false);
+    }
+  }
+
+  function handleDateChange(newDate){
+    setForm(prev=>({...prev, dueAt: newDate}));
+    if(newDate){
+      req(`/users/agents?date=${newDate}`).then(setAgents).catch(()=>{});
+      if(selectedAreas.length){
+        loadTerminalsForAreas(selectedAreas, newDate);
+      }
     }
   }
 
@@ -110,6 +131,18 @@ export default function AreaDispatch({done}){
   const available=bal?.available??null;
   const overBudget=available!==null&&total>available;
   const allAssigned=selected.length>0 && selected.every(id => Boolean(agentOverrides[id] || form.agentId));
+
+  const selectableTerminals = terminals.filter(t => !t.activeJob && t.official?.status !== 'Inactive');
+  const allSelected = selectableTerminals.length > 0 && selectableTerminals.every(t => selected.includes(t.terminalId));
+  const someSelected = selectableTerminals.some(t => selected.includes(t.terminalId));
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelected([]);
+    } else {
+      setSelected(selectableTerminals.map(t => t.terminalId));
+    }
+  }
 
   if(initialLoading) return <LoadingSpinner text="Loading route planning data..."/>;
 
@@ -207,7 +240,7 @@ export default function AreaDispatch({done}){
           </select>
         </label>
         <label>Complete before
-          <input type="date" value={form.dueAt} onChange={e=>setForm({...form,dueAt:e.target.value})} required/>
+          <input type="date" value={form.dueAt} onChange={e=>handleDateChange(e.target.value)} required/>
         </label>
       </div>
     </section>
@@ -224,11 +257,56 @@ export default function AreaDispatch({done}){
         <div><small>SELECTED ATMs</small><b>{selected.length}</b></div>
         <div><small>TOTAL CASH TO HANDOVER</small><b style={{color:overBudget?'#a63e36':'inherit'}}>{money2(total)}{overBudget?` ⚠ exceeds ${money2(available)} available`:''}</b></div>
       </div>
-
+ 
       <div className="area-list">
-        <div className="area-list-head">
-          <h3>ATM route checklist</h3>
-          <button type="button" onClick={()=>setSelected(terminals.filter(t=>!t.activeJob&&t.official?.status!=='Inactive').map(t=>t.terminalId))}>Select all available active</button>
+        <div className="area-list-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <input
+              type="checkbox"
+              id="selectAllAtms"
+              checked={allSelected}
+              ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+              onChange={toggleSelectAll}
+              disabled={selectableTerminals.length === 0}
+              style={{
+                width: 18,
+                height: 18,
+                cursor: selectableTerminals.length === 0 ? 'not-allowed' : 'pointer',
+                accentColor: '#183d36',
+                margin: 0
+              }}
+              title={allSelected ? "Deselect all" : "Select all available active"}
+            />
+            <label htmlFor="selectAllAtms" style={{ margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h3 style={{ margin: 0, font: '700 18px Manrope', color: '#173e36' }}>ATM route checklist</h3>
+              <span style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: allSelected ? '#15803d' : someSelected ? '#0369a1' : '#64748b',
+                background: allSelected ? '#dcfce7' : someSelected ? '#e0f2fe' : '#f1f5f3',
+                padding: '2px 8px',
+                borderRadius: 12
+              }}>
+                {allSelected ? '✓ All Selected' : someSelected ? `${selected.length}/${selectableTerminals.length} Selected` : 'Select All'}
+              </span>
+            </label>
+          </div>
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            disabled={selectableTerminals.length === 0}
+            style={{
+              border: 0,
+              background: 'none',
+              color: '#286658',
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontSize: 13,
+              textDecoration: 'underline'
+            }}
+          >
+            {allSelected ? 'Deselect all' : 'Select all available active'}
+          </button>
         </div>
 
         {terminals.map(t=>{

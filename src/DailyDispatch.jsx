@@ -3,17 +3,26 @@ import LoadingSpinner from './LoadingSpinner.jsx';
 const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 const money=v=>'$'+Number(v||0).toLocaleString();
 
+const getTodayLocal = () => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().split('T')[0];
+};
+
 export default function DailyDispatch({done}){
   const[terminalId,setTerminalId]=useState('');
   const[terminal,setTerminal]=useState();
   const[agents,setAgents]=useState([]);
   const[bal,setBal]=useState(null);
   const[msg,setMsg]=useState('');
-  const[f,setF]=useState({agentId:'',cashToLoad:'',dueAt:'',note:''});
+  const[f,setF]=useState({agentId:'',cashToLoad:'',dueAt:getTodayLocal(),note:''});
 
-  const loadAgents=()=>req('/users/agents').then(setAgents);
+  const loadAgents=(targetDate=f.dueAt)=>{
+    const q=targetDate?`?date=${targetDate}`:'';
+    return req('/users/agents'+q).then(setAgents);
+  };
   const loadBal=()=>{
-    const ld=new Date();const localDate=`${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
+    const localDate=getTodayLocal();
     return req(`/cash/available?localDate=${localDate}`).then(setBal).catch(()=>{});
   };
 
@@ -23,26 +32,43 @@ export default function DailyDispatch({done}){
     Promise.all([loadAgents(),loadBal()]).finally(()=>setInitialLoading(false));
   },[]);
 
-  async function find(e){
-    e.preventDefault();
+  async function find(e, overrideTid=terminalId, overrideDate=f.dueAt){
+    e?.preventDefault?.();
+    const tid=(overrideTid||'').trim();
+    if(!tid) return;
     try{
-      const[atm,active]=await Promise.all([req('/terminals/'+terminalId),req('/jobs/active-terminal/'+terminalId)]);
-      if(active.busy){setTerminal();return setMsg(`${terminalId} is already assigned to ${active.job?.agent?.name||'an agent'} (${active.job?.status}). Complete and approve that job first.`);}
-      if(atm.official?.status==='Inactive'){setTerminal();return setMsg(`Cannot assign ${terminalId}: ATM is currently Inactive. Please activate the terminal in Terminal Registry first.`);}
+      const dateParam=overrideDate?`?date=${overrideDate}`:'';
+      const[atm,active]=await Promise.all([req('/terminals/'+tid),req('/jobs/active-terminal/'+tid+dateParam)]);
+      if(active.busy){
+        setTerminal();
+        return setMsg(`${tid} is already assigned on ${overrideDate||'selected date'} to ${active.job?.agent?.name||'an agent'} (${active.job?.status}). Complete and approve that job first, or select another date.`);
+      }
+      if(atm.official?.status==='Inactive'){
+        setTerminal();
+        return setMsg(`Cannot assign ${tid}: ATM is currently Inactive. Please activate the terminal in Terminal Registry first.`);
+      }
       setTerminal(atm);
       const suggested=Math.max(0,(atm.official?.wishAmount||0)-(atm.official?.cashBalance||0));
       setF(p=>({...p,cashToLoad:suggested}));
-      setMsg('ATM is available for a new daily dispatch.');
+      setMsg(`ATM is available for dispatch on ${overrideDate||'selected date'}.`);
     }catch(e){setTerminal();setMsg(e.message);}
+  }
+
+  function handleDateChange(newDate){
+    setF(prev=>({...prev,dueAt:newDate}));
+    loadAgents(newDate);
+    if(terminalId){
+      find(null,terminalId,newDate);
+    }
   }
 
   async function dispatch(e){
     e.preventDefault();
     try{
-      const ld=new Date();const localDate=`${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
+      const localDate=getTodayLocal();
       await req('/jobs/dispatch',{method:'POST',body:JSON.stringify({...f,terminalId:terminal.terminalId,cashToLoad:+f.cashToLoad,localDate})});
       setMsg('Daily job assigned successfully.');
-      setTerminal();setF({agentId:'',cashToLoad:'',dueAt:'',note:''});
+      setTerminal();setF({agentId:'',cashToLoad:'',dueAt:getTodayLocal(),note:''});
       loadAgents();loadBal();done?.();
     }catch(e){setMsg(e.message);}
   }
@@ -89,8 +115,9 @@ export default function DailyDispatch({done}){
         )}
       </div>}
 
-      <form className="find-terminal" onSubmit={find}>
+      <form className="find-terminal" onSubmit={find} style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
         <input placeholder="Terminal ID e.g. CA101618" value={terminalId} onChange={e=>setTerminalId(e.target.value.toUpperCase())}/>
+        <input type="date" value={f.dueAt} onChange={e=>handleDateChange(e.target.value)} title="Target Dispatch Date" style={{width:'auto',padding:'8px 12px',borderRadius:8,border:'1px solid #c8d3cc'}}/>
         <button>Check ATM</button>
       </form>
 
@@ -122,7 +149,7 @@ export default function DailyDispatch({done}){
             </small>}
           </label>
           <label>Complete before
-            <input type="date" required value={f.dueAt} onChange={e=>setF({...f,dueAt:e.target.value})}/>
+            <input type="date" required value={f.dueAt} onChange={e=>handleDateChange(e.target.value)}/>
           </label>
         </div>
         <label>Daily instructions
