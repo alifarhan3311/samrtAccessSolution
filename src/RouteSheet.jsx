@@ -13,6 +13,8 @@ async function json(path, options = {}) {
   return d;
 }
 
+import { getTorontoDateString } from './timezone';
+
 const fmtDate = d => {
   if (!d) return '—';
   return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -26,11 +28,7 @@ export default function RouteSheet() {
   const isAgent = user?.role === 'agent';
 
   const [agentId, setAgentId] = useState(isAgent ? (user.sub || user.id || user._id) : '');
-  const [date, setDate] = useState(() => {
-    const d = new Date();
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().split('T')[0];
-  });
+  const [date, setDate] = useState(() => getTorontoDateString());
   
   const [groups, setGroups] = useState([]);
   const [tickets, setTickets] = useState([]);

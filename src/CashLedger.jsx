@@ -10,8 +10,13 @@ const req=async(p,o={})=>{
 
 const money=v=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD',maximumFractionDigits:0}).format(v||0);
 const fmt=v=>v?new Date(v).toLocaleDateString('en-CA',{dateStyle:'medium'}):'—';
-const todayStr=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
-const monthStartStr=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;};
+import { getTorontoDateString } from './timezone';
+
+const todayStr = () => getTorontoDateString();
+const monthStartStr = () => {
+  const t = getTorontoDateString();
+  return t.slice(0, 8) + '01'; // YYYY-MM-01
+};
 
 export default function CashLedger(){
   const[tab,setTab]=useState('overview');

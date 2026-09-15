@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import LoadingSpinner from './LoadingSpinner.jsx';
+import { getTorontoDateString } from './timezone';
 import './system-logs.css';
 
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -104,24 +105,24 @@ export default function SystemLogs() {
   // Compute date range from preset
   const getDateRange = () => {
     if (datePreset === 'today') {
-      const t = new Date().toISOString().slice(0, 10);
+      const t = getTorontoDateString();
       return { from: t, to: t };
     }
     if (datePreset === 'yesterday') {
       const d = new Date();
       d.setDate(d.getDate() - 1);
-      const y = d.toISOString().slice(0, 10);
+      const y = getTorontoDateString(d);
       return { from: y, to: y };
     }
     if (datePreset === '7days') {
       const d = new Date();
       d.setDate(d.getDate() - 7);
-      return { from: d.toISOString().slice(0, 10), to: new Date().toISOString().slice(0, 10) };
+      return { from: getTorontoDateString(d), to: getTorontoDateString() };
     }
     if (datePreset === 'month') {
-      const d = new Date();
-      const first = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-      return { from: first, to: new Date().toISOString().slice(0, 10) };
+      const t = getTorontoDateString();
+      const first = t.slice(0, 8) + '01';
+      return { from: first, to: t };
     }
     if (datePreset === 'custom') {
       return { from: fromDate, to: toDate };

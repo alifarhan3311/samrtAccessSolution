@@ -1,16 +1,11 @@
 import React,{useEffect,useState}from'react';
 import LoadingSpinner from './LoadingSpinner.jsx';
+import { getTorontoDateString } from './timezone';
 const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 const money2=v=>'$'+Number(v||0).toLocaleString();
 const fmt=v=>v?new Date(v).toLocaleDateString('en-CA'):'N/A';
 
 import DailyDispatch from './DailyDispatch.jsx';
-
-const getTodayLocal = () => {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().split('T')[0];
-};
 
 export default function AreaDispatch({done}){
   const[areas,setAreas]=useState([]);
@@ -21,7 +16,7 @@ export default function AreaDispatch({done}){
   const[cashOverrides,setCashOverrides]=useState({});
   const[agentOverrides,setAgentOverrides]=useState({});
   const[noteOverrides,setNoteOverrides]=useState({});
-  const[form,setForm]=useState({agentId:'',dueAt:getTodayLocal(),note:''});
+  const[form,setForm]=useState({agentId:'',dueAt:getTorontoDateString(),note:''});
   const[msg,setMsg]=useState('');
   const[bal,setBal]=useState(null);
   const[loadingTerminals,setLoadingTerminals]=useState(false);

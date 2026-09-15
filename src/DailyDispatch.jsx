@@ -3,11 +3,7 @@ import LoadingSpinner from './LoadingSpinner.jsx';
 const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 const money=v=>'$'+Number(v||0).toLocaleString();
 
-const getTodayLocal = () => {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().split('T')[0];
-};
+import { getTorontoDateString } from './timezone';
 
 export default function DailyDispatch({done}){
   const[terminalId,setTerminalId]=useState('');
@@ -15,14 +11,14 @@ export default function DailyDispatch({done}){
   const[agents,setAgents]=useState([]);
   const[bal,setBal]=useState(null);
   const[msg,setMsg]=useState('');
-  const[f,setF]=useState({agentId:'',cashToLoad:'',dueAt:getTodayLocal(),note:''});
+  const[f,setF]=useState({agentId:'',cashToLoad:'',dueAt:getTorontoDateString(),note:''});
 
   const loadAgents=(targetDate=f.dueAt)=>{
     const q=targetDate?`?date=${targetDate}`:'';
     return req('/users/agents'+q).then(setAgents);
   };
   const loadBal=()=>{
-    const localDate=getTodayLocal();
+    const localDate=getTorontoDateString();
     return req(`/cash/available?localDate=${localDate}`).then(setBal).catch(()=>{});
   };
 
@@ -65,10 +61,10 @@ export default function DailyDispatch({done}){
   async function dispatch(e){
     e.preventDefault();
     try{
-      const localDate=getTodayLocal();
+      const localDate=getTorontoDateString();
       await req('/jobs/dispatch',{method:'POST',body:JSON.stringify({...f,terminalId:terminal.terminalId,cashToLoad:+f.cashToLoad,localDate})});
       setMsg('Daily job assigned successfully.');
-      setTerminal();setF({agentId:'',cashToLoad:'',dueAt:getTodayLocal(),note:''});
+      setTerminal();setF({agentId:'',cashToLoad:'',dueAt:getTorontoDateString(),note:''});
       loadAgents();loadBal();done?.();
     }catch(e){setMsg(e.message);}
   }
