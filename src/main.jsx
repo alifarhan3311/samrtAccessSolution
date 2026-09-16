@@ -388,7 +388,7 @@ function Dashboard({go}){
         <span style={{fontSize:16}}>ℹ️</span>
         <div>
           <strong>Previous Days' Cash: {money(today.previousCash)}</strong>
-          {today.withdrawn === 0 ? ' — Aaj bank se cash nahi nikala gaya ($0). Aap pichle dino ka bacha hua cash use kar sakte hain.' : ''}
+          {today.withdrawn === 0 ? ' — No cash was withdrawn from the bank today ($0). You can use the remaining cash from previous days.' : ''}
           &nbsp;· <b>Total Available Now:</b> <span style={{fontWeight:800,color:'#0369a1'}}>{money(today.vaultAvailable ?? today.previousCash)}</span>
         </div>
       </div>

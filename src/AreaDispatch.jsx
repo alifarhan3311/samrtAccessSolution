@@ -185,7 +185,7 @@ export default function AreaDispatch({done}){
         </div>
         {bal.withdrawn === 0 && (bal.previousBalance || 0) > 0 && (
           <div style={{fontSize:12,marginTop:8,paddingTop:8,borderTop:'1px dashed rgba(255,255,255,0.3)',opacity:0.95}}>
-            ℹ️ Aaj bank se cash nahi nikala gaya ($0). Aap pichle dino ka bacha hua cash dispatch ke liye use kar sakte hain.
+            ℹ️ No cash was withdrawn from the bank today ($0). You can use the remaining cash from previous days for dispatch.
           </div>
         )}
       </div>}
