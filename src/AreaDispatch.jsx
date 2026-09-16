@@ -24,7 +24,7 @@ export default function AreaDispatch({done}){
   const[showSingleDispatch, setShowSingleDispatch] = useState(false);
 
   useEffect(()=>{
-    const localDate=getTodayLocal();
+    const localDate=getTorontoDateString();
     Promise.all([
       req('/location-areas'),
       req(`/users/agents?date=${localDate}`),
