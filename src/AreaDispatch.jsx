@@ -23,6 +23,28 @@ export default function AreaDispatch({done}){
   const[initialLoading,setInitialLoading]=useState(true);
   const[showSingleDispatch, setShowSingleDispatch] = useState(false);
 
+  const [ticketModal, setTicketModal] = useState(null);
+  const [tForm, setTForm] = useState({ problem: '', assignedTo: '' });
+  const [tSubmitting, setTSubmitting] = useState(false);
+
+  async function handleCreateTicket(e) {
+    e.preventDefault();
+    setTSubmitting(true);
+    try {
+      await req('/tickets', {
+        method: 'POST',
+        body: JSON.stringify({ terminalId: ticketModal, problem: tForm.problem, assignedTo: tForm.assignedTo || undefined })
+      });
+      setMsg(`Ticket generated successfully for ${ticketModal}!`);
+      setTicketModal(null);
+      setTForm({ problem: '', assignedTo: '' });
+    } catch(err) {
+      alert(err.message);
+    } finally {
+      setTSubmitting(false);
+    }
+  }
+
   useEffect(()=>{
     const localDate=getTorontoDateString();
     Promise.all([
@@ -34,8 +56,9 @@ export default function AreaDispatch({done}){
       .finally(()=>setInitialLoading(false));
   },[]);
 
-  async function loadTerminalsForAreas(areaList, targetDate = form.dueAt){
-    setSelectedAreas(areaList);setSelected([]);setTerminals([]);setCashOverrides({});setAgentOverrides({});setNoteOverrides({});setMsg('');
+  async function loadTerminalsForAreas(areaList, targetDate = form.dueAt, keepMsg = false){
+    setSelectedAreas(areaList);setSelected([]);setTerminals([]);setCashOverrides({});setAgentOverrides({});setNoteOverrides({});
+    if(!keepMsg)setMsg('');
     if(!areaList.length)return;
     setLoadingTerminals(true);
     try{
@@ -118,7 +141,7 @@ export default function AreaDispatch({done}){
         localDate
       })});
       setMsg(`${result.assigned} ATMs assigned across ${selectedAreas.length} area(s). Total cash: $${result.totalCash.toLocaleString()}. ${result.skippedLocked} locked ATM(s) skipped.`);
-      setTimeout(()=>done?.(),1200);
+      loadTerminalsForAreas(selectedAreas, form.dueAt, true);
     }catch(e){setMsg(e.message);}
   }
 
@@ -329,9 +352,10 @@ export default function AreaDispatch({done}){
             <div>
               <b>{t.terminalId} · {t.official?.tempName || t.official?.name} {isInactive&&<span style={{color:'#a63e36',fontSize:11,fontWeight:800,marginLeft:6}}>(INACTIVE)</span>}</b>
               <span>{t.current?.address||t.official?.address} · {t.current?.city||t.official?.city} &nbsp; <span style={{background:'#edf2f0',padding:'1px 6px',borderRadius:8,fontWeight:700,fontSize:10,color:'#357064'}}>{t.official?.locationArea}</span></span>
-              <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, color: '#555' }}>
+              <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, color: '#555', alignItems: 'center' }}>
                 <span>Last Withdrawal: <strong style={{color:'#183d36'}}>{fmt(t.official?.lastWithdrawalAt)}</strong></span>
                 <span>Last Comm: <strong style={{color: isDisconnected ? '#dc2626' : '#183d36'}}>{t.official?.lastCommunication || 'N/A'}</strong></span>
+                <button type="button" onClick={() => setTicketModal(t.terminalId)} style={{ padding: '2px 8px', fontSize: 10, background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>🎫 Create Ticket</button>
               </div>
             </div>
             <section>
@@ -442,6 +466,55 @@ export default function AreaDispatch({done}){
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#f9faf8' }}>
             <DailyDispatch done={() => setShowSingleDispatch(false)} />
           </div>
+        </div>
+      </div>
+    )}
+
+    {/* Modal Overlay for Ticket Creation */}
+    {ticketModal && (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center',
+        zIndex: 9999, padding: '20px'
+      }}>
+        <div style={{
+          background: '#fff', borderRadius: '12px', width: '100%', maxWidth: '500px',
+          display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', overflow: 'hidden'
+        }}>
+          <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: '16px', color: '#0f172a' }}>Create Ticket for {ticketModal}</h3>
+            <button onClick={() => setTicketModal(null)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>×</button>
+          </div>
+          <form onSubmit={handleCreateTicket} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+              Describe Problem
+              <textarea 
+                required 
+                rows="4" 
+                value={tForm.problem} 
+                onChange={e => setTForm({ ...tForm, problem: e.target.value })}
+                style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical' }}
+                placeholder="e.g. Bill jam, offline, card reader issue..."
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+              Assign Agent (Optional)
+              <select 
+                value={tForm.assignedTo} 
+                onChange={e => setTForm({ ...tForm, assignedTo: e.target.value })}
+                style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
+              >
+                <option value="">-- Leave Unassigned --</option>
+                {agents.map(a => <option key={a._id} value={a._id}>{a.name}</option>)}
+              </select>
+            </label>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <button type="button" onClick={() => setTicketModal(null)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button type="submit" disabled={tSubmitting} style={{ padding: '8px 16px', background: '#b45309', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
+                {tSubmitting ? 'Creating...' : 'Create Ticket'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     )}

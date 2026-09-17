@@ -367,14 +367,16 @@ export default function RouteSheet() {
                       })}
                     </React.Fragment>
                   ))}
-                  
-                  <tr className="rs-total-row">
-                    <td colSpan="2" style={{ textAlign: 'right', fontWeight: 'bold' }}></td>
-                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{totalRemaining}</td>
+                  <tr style={{ background: '#f9fafb' }}>
+                    <td colSpan="2" style={{ textAlign: 'right', fontWeight: 800, paddingRight: '12px' }}>TOTAL:</td>
+                    <td className="rs-blank-cell p-0" style={{ textAlign: 'center', fontWeight: 800, padding: '8px' }}>
+                      {groups.reduce((sum, g) => sum + g.jobs.reduce((s, job) => s + Number(job.routeBillsRemaining ?? Math.floor((job.terminal?.official?.cashBalance || 0) / 20) ?? 0), 0), 0)}
+                    </td>
                     <td className="rs-blank-cell"></td>
-                    <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{totalToLoad}</td>
-                    <td className="rs-blank-cell"></td>
-                    <td className="rs-blank-cell"></td>
+                    <td className="rs-blank-cell p-0" style={{ textAlign: 'center', fontWeight: 800, padding: '8px' }}>
+                      {groups.reduce((sum, g) => sum + g.jobs.reduce((s, job) => s + Number(job.routeCashToLoad ?? Math.floor((job.cashToLoad || 0) / 20) ?? 0), 0), 0)}
+                    </td>
+                    <td className="rs-blank-cell" colSpan="3"></td>
                   </tr>
                 </tbody>
               </table>
