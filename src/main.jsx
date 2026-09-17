@@ -19,6 +19,7 @@ import Discrepancies from './Discrepancies.jsx';
 import SystemLogs from './SystemLogs.jsx';
 import Tickets from './Tickets.jsx';
 import AtmForms from './AtmForms.jsx';
+import MasterUpload from './MasterUpload.jsx';
 import'./style.css';
 import'./terminal.css';
 import'./history.css';
@@ -267,7 +268,8 @@ function Shell(){
     ['discrepancies','Cash discrepancies','⚠','/discrepancies'],
     ['history','ATM movement history','◷','/history'],
     ['logs','Activity & Audit Logs','📋','/logs'],
-    ['import','Master Sheet Upload','📂','/import'],
+    ['import','Official data sync','⇅','/import'],
+    ['master-upload','Master Sheet Upload','📂','/master-upload'],
     ['atm','ATM Forms','📝','/atm']
   ];
 
@@ -295,7 +297,8 @@ function Shell(){
     history:'ATM movement history',
     discrepancies:'Cash discrepancies & alerts',
     logs:'System Activity & Audit Logs',
-    import:'Master Sheet Upload',
+    import:'Official data sync',
+    'master-upload':'Master Sheet Upload',
     atm:'ATM Forms'
   };
 
@@ -314,6 +317,7 @@ function Shell(){
       history:'/history',
       logs:'/logs',
       import:'/import',
+      'master-upload':'/master-upload',
       atm:'/atm'
     };
     navigate(pathMap[targetKey]||(targetKey.startsWith('/')?targetKey:`/${targetKey}`));
@@ -352,6 +356,7 @@ function Shell(){
         <Route path="/history" element={can('history')?<AssignmentHistory/>:<Navigate to="/jobs" replace/>} />
         <Route path="/logs" element={can('logs')?<SystemLogs/>:<Navigate to="/jobs" replace/>} />
         <Route path="/import" element={can('import')?<OfficialImport/>:<Navigate to="/jobs" replace/>} />
+        <Route path="/master-upload" element={can('import')?<MasterUpload/>:<Navigate to="/jobs" replace/>} />
         <Route path="/tickets" element={<Tickets/>} />
         <Route path="/atm" element={can('atm')?<AtmForms/>:<Navigate to="/jobs" replace/>} />
         <Route path="*" element={<Navigate to={agent ? '/jobs' : '/dashboard'} replace />} />
