@@ -270,6 +270,34 @@ async function importWorkbook(buffer, fileName, userId, io) {
         });
 
       if (changedFields.length) {
+        const nameChanged = changedFields.find(f => f.field === 'official.tempName' || f.field === 'official.name');
+        if (nameChanged) {
+          const newName = extracted.tempName || extracted.name;
+          const oldName = existing.official?.tempName || existing.official?.name;
+          if (newName && newName !== oldName) {
+            const now = new Date();
+            const arr = Array.isArray(existing.assignmentHistory) ? [...existing.assignmentHistory] : [];
+            if (arr.length > 0) {
+              const last = arr[arr.length - 1];
+              if (!last.endedAt) last.endedAt = now;
+            }
+            arr.push({
+              businessName: newName,
+              address: extracted.address || existing.official?.address || '',
+              city: extracted.city || existing.official?.city || '',
+              paymentAmount: extracted.wishAmount || existing.official?.wishAmount || 0,
+              note: 'Auto-assigned from official import',
+              assignedAt: now,
+              assignedBy: userId
+            });
+            partialSet.assignmentHistory = arr;
+            partialSet['current.businessName'] = newName;
+            if (extracted.address) partialSet['current.address'] = extracted.address;
+            if (extracted.city) partialSet['current.city'] = extracted.city;
+            partialSet['current.assignedAt'] = now;
+          }
+        }
+
         bulkOps.push({ updateOne: { filter: { _id: existing._id }, update: { $set: partialSet } } });
         changes.push({ terminalId, type: 'updated', format, fields: changedFields });
         totals.updated++;

@@ -267,7 +267,7 @@ function Shell(){
     ['discrepancies','Cash discrepancies','⚠','/discrepancies'],
     ['history','ATM movement history','◷','/history'],
     ['logs','Activity & Audit Logs','📋','/logs'],
-    ['import','Official import','⇅','/import'],
+    ['import','Master Sheet Upload','📂','/import'],
     ['atm','ATM Forms','📝','/atm']
   ];
 
@@ -295,7 +295,7 @@ function Shell(){
     history:'ATM movement history',
     discrepancies:'Cash discrepancies & alerts',
     logs:'System Activity & Audit Logs',
-    import:'Official data import',
+    import:'Master Sheet Upload',
     atm:'ATM Forms'
   };
 

@@ -22,18 +22,18 @@ const fmtDate = d => {
 
 export default function RouteSheet() {
   const [agents, setAgents] = useState([]);
-  
+
   const token = localStorage.getItem('token');
   const user = token ? JSON.parse(atob(token.split('.')[1])) : null;
   const isAgent = user?.role === 'agent';
 
   const [agentId, setAgentId] = useState(isAgent ? (user.sub || user.id || user._id) : '');
   const [date, setDate] = useState(() => getTorontoDateString());
-  
+
   const [groups, setGroups] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [ticketFilter, setTicketFilter] = useState('pending'); // 'pending' or 'all'
-  
+
   // Returns state
   const [returns, setReturns] = useState([]);
   const [returnsLoading, setReturnsLoading] = useState(false);
@@ -44,13 +44,14 @@ export default function RouteSheet() {
   const [loading, setLoading] = useState(false);
   const [ticketsLoading, setTicketsLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   const [reassigningId, setReassigningId] = useState(null);
   const [newAgentId, setNewAgentId] = useState('');
+  const [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', onConfirm: null });
 
   useEffect(() => {
     if (!isAgent) {
-      json('/users/agents').then(setAgents).catch(() => {});
+      json('/users/agents').then(setAgents).catch(() => { });
     }
   }, [isAgent]);
 
@@ -127,42 +128,56 @@ export default function RouteSheet() {
     e.preventDefault();
     const amount = Number(rForm.amount);
     const targetAgent = isAgent ? (user.sub || user.id || user._id) : agentId;
-    if (!targetAgent) { setRMsg({text: 'Select an agent first.', ok: false}); return; }
-    if (!amount || amount < 0) { setRMsg({text: 'Enter a valid amount.', ok: false}); return; }
-    setRSaving(true); setRMsg({text: '', ok: false});
+    if (!targetAgent) { setRMsg({ text: 'Select an agent first.', ok: false }); return; }
+    if (!amount || amount < 0) { setRMsg({ text: 'Enter a valid amount.', ok: false }); return; }
+    setRSaving(true); setRMsg({ text: '', ok: false });
     try {
       await json('/cash/return', {
         method: 'POST',
         body: JSON.stringify({ agentId: targetAgent, amount, note: rForm.note || undefined, terminalId: rForm.terminalId || undefined, date })
       });
-      setRMsg({text: `Recorded: $${amount} cash return saved.`, ok: true});
+      setRMsg({ text: `Recorded: $${amount} cash return saved.`, ok: true });
       setRForm({ amount: '', note: '', terminalId: '' });
       loadData();
     } catch (err) {
-      setRMsg({text: err.message, ok: false});
+      setRMsg({ text: err.message, ok: false });
     } finally {
       setRSaving(false);
     }
   };
 
-  const delReturn = async (id) => {
-    if(!confirm('Delete this record? This cannot be undone.')) return;
-    try {
-      await json(`/cash/returns/${id}`, { method: 'DELETE' });
-      loadData();
-    } catch (e) { alert(e.message); }
+  const delReturn = (id) => {
+    setConfirmModal({
+      open: true,
+      title: 'Delete Record?',
+      message: 'This cannot be undone.',
+      onConfirm: async () => {
+        setConfirmModal({ ...confirmModal, open: false });
+        try {
+          await json(`/cash/returns/${id}`, { method: 'DELETE' });
+          loadData();
+        } catch (e) { alert(e.message); }
+      }
+    });
   };
 
-  const cancelJob = async (id) => {
-    if(!confirm('Cancel this job? The ATM will be removed from this route and become available for dispatch again.')) return;
-    try {
-      await json(`/route-sheet/${id}`, { method: 'DELETE' });
-      loadData();
-    } catch (e) { alert(e.message); }
+  const cancelJob = (id) => {
+    setConfirmModal({
+      open: true,
+      title: 'Cancel Job?',
+      message: 'The ATM will be removed from this route and become available for dispatch again.',
+      onConfirm: async () => {
+        setConfirmModal({ ...confirmModal, open: false });
+        try {
+          await json(`/route-sheet/${id}`, { method: 'DELETE' });
+          loadData();
+        } catch (e) { alert(e.message); }
+      }
+    });
   };
 
   const saveReassign = async (id) => {
-    if(!newAgentId) return alert('Please select a new agent');
+    if (!newAgentId) return alert('Please select a new agent');
     try {
       await json(`/route-sheet/${id}/reassign`, {
         method: 'PATCH',
@@ -201,7 +216,7 @@ export default function RouteSheet() {
           <p className="eyebrow">PRINTABLE REPORTS</p>
           <h3>Daily Route & Assigned Tickets</h3>
         </div>
-        
+
         <div className="rs-filters">
           {!isAgent && (
             <label>Agent
@@ -214,8 +229,8 @@ export default function RouteSheet() {
           <label>Date
             <input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </label>
-          <button 
-            className="aj-btn-primary" 
+          <button
+            className="aj-btn-primary"
             onClick={() => window.print()}
             disabled={!hasAnyData || loading}
           >
@@ -225,7 +240,7 @@ export default function RouteSheet() {
       </div>
 
       {error && <p className="error no-print">{error}</p>}
-      
+
       {!agentId && !isAgent ? (
         <p className="aj-empty no-print">Please select an agent to view their route sheet and assigned maintenance tickets.</p>
       ) : loading && ticketsLoading ? (
@@ -259,12 +274,12 @@ export default function RouteSheet() {
                 <thead>
                   <tr>
                     <th style={{ width: '30%' }}>DBA Name and Address</th>
-                    <th style={{ width: '8%' }}>Terminal<br/>Status</th>
-                    <th style={{ width: '9%' }}>Bills<br/>Remainin</th>
-                    <th style={{ width: '10%' }}>Existing<br/>Cash</th>
-                    <th style={{ width: '9%' }}>To Be<br/>Load</th>
-                    <th style={{ width: '12%' }}>Cash<br/>Loaded</th>
-                    <th style={{ width: '11%' }}>Load<br/>Time</th>
+                    <th style={{ width: '8%' }}>Terminal<br />Status</th>
+                    <th style={{ width: '9%' }}>Bills<br />Remainin</th>
+                    <th style={{ width: '10%' }}>Existing<br />Cash</th>
+                    <th style={{ width: '9%' }}>To Be<br />Load</th>
+                    <th style={{ width: '12%' }}>Cash<br />Loaded</th>
+                    <th style={{ width: '11%' }}>Load<br />Time</th>
                     <th className="no-print" style={{ width: '11%' }}>Actions</th>
                   </tr>
                 </thead>
@@ -284,55 +299,69 @@ export default function RouteSheet() {
                         const status = term.official?.status === 'Inactive' ? 'Down' : 'Up';
                         const remain = Math.floor((term.official?.cashBalance || 0) / 20);
                         const load = Math.floor((job.cashToLoad || 0) / 20);
-                        
+
                         return (
                           <tr key={job._id}>
                             <td className="rs-dba-cell">
                               <strong>{job.terminalId} : {bizName}</strong>
-                              <br/>
+                              <br />
                               <span style={{ fontSize: '11px', color: '#444' }}>{address} · {city}</span>
+                              {(() => {
+                                const noteRaw = (job.events && job.events[0]?.note) || '';
+                                let commentText = '';
+                                if (noteRaw.includes(' — ')) {
+                                  commentText = noteRaw.split(' — ').slice(1).join(' — ').trim();
+                                } else if (!noteRaw.startsWith('Area route:') && !noteRaw.startsWith('Reassigned') && noteRaw.trim()) {
+                                  commentText = noteRaw.trim();
+                                }
+                                return commentText ? (
+                                  <div style={{ marginTop: '6px', background: '#fef3c7', border: '1.5px solid #f59e0b', color: '#92400e', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 800 }}>
+                                    📝 {commentText}
+                                  </div>
+                                ) : null;
+                              })()}
                             </td>
                             <td style={{ textAlign: 'center' }}>{status}</td>
                             <td className="rs-blank-cell p-0">
-                              <input 
-                                className="rs-input" 
-                                type="number" 
+                              <input
+                                className="rs-input"
+                                type="number"
                                 value={job.routeBillsRemaining ?? remain ?? ''}
                                 onChange={e => handleInputChange(gIdx, jIdx, 'routeBillsRemaining', e.target.value)}
                                 onBlur={e => handleUpdateJob(job._id, 'routeBillsRemaining', e.target.value)}
                               />
                             </td>
                             <td className="rs-blank-cell p-0">
-                              <input 
-                                className="rs-input" 
-                                type="number" 
+                              <input
+                                className="rs-input"
+                                type="number"
                                 value={job.routeExistingCash ?? ''}
                                 onChange={e => handleInputChange(gIdx, jIdx, 'routeExistingCash', e.target.value)}
                                 onBlur={e => handleUpdateJob(job._id, 'routeExistingCash', e.target.value)}
                               />
                             </td>
                             <td className="rs-blank-cell p-0">
-                              <input 
-                                className="rs-input" 
-                                type="number" 
+                              <input
+                                className="rs-input"
+                                type="number"
                                 value={job.routeCashToLoad ?? load ?? ''}
                                 onChange={e => handleInputChange(gIdx, jIdx, 'routeCashToLoad', e.target.value)}
                                 onBlur={e => handleUpdateJob(job._id, 'routeCashToLoad', e.target.value)}
                               />
                             </td>
                             <td className="rs-blank-cell p-0">
-                              <input 
-                                className="rs-input" 
-                                type="number" 
+                              <input
+                                className="rs-input"
+                                type="number"
                                 value={job.routeCashLoaded ?? ''}
                                 onChange={e => handleInputChange(gIdx, jIdx, 'routeCashLoaded', e.target.value)}
                                 onBlur={e => handleUpdateJob(job._id, 'routeCashLoaded', e.target.value)}
                               />
                             </td>
                             <td className="rs-blank-cell p-0">
-                              <input 
-                                className="rs-input" 
-                                type="text" 
+                              <input
+                                className="rs-input"
+                                type="text"
                                 placeholder="HH:MM"
                                 value={job.routeLoadTime ?? ''}
                                 onChange={e => handleInputChange(gIdx, jIdx, 'routeLoadTime', e.target.value)}
@@ -342,8 +371,8 @@ export default function RouteSheet() {
                             <td className="no-print" style={{ textAlign: 'center' }}>
                               {reassigningId === job._id ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                  <select 
-                                    value={newAgentId} 
+                                  <select
+                                    value={newAgentId}
                                     onChange={e => setNewAgentId(e.target.value)}
                                     style={{ padding: '2px 4px', fontSize: '11px', width: '100%' }}
                                   >
@@ -352,7 +381,7 @@ export default function RouteSheet() {
                                   </select>
                                   <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
                                     <button onClick={() => saveReassign(job._id)} style={{ fontSize: '11px', padding: '2px 4px', background: '#183d36', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}>Save</button>
-                                    <button onClick={() => {setReassigningId(null); setNewAgentId('');}} style={{ fontSize: '11px', padding: '2px 4px', background: '#eee', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer' }}>Cancel</button>
+                                    <button onClick={() => { setReassigningId(null); setNewAgentId(''); }} style={{ fontSize: '11px', padding: '2px 4px', background: '#eee', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer' }}>Cancel</button>
                                   </div>
                                 </div>
                               ) : (
@@ -398,9 +427,9 @@ export default function RouteSheet() {
                   {displayedTickets.length} {ticketFilter === 'pending' ? 'Pending' : 'Total'}
                 </span>
               </div>
-              
+
               <div className="no-print" style={{ display: 'flex', gap: '6px' }}>
-                <button 
+                <button
                   onClick={() => setTicketFilter('pending')}
                   style={{
                     padding: '4px 10px',
@@ -415,7 +444,7 @@ export default function RouteSheet() {
                 >
                   Pending Only
                 </button>
-                <button 
+                <button
                   onClick={() => setTicketFilter('all')}
                   style={{
                     padding: '4px 10px',
@@ -458,10 +487,10 @@ export default function RouteSheet() {
                       <tr key={t._id}>
                         <td className="rs-dba-cell">
                           <strong>{t.terminalId}</strong>
-                          {biz !== '—' && <><br/><span style={{ fontWeight: 600, color: '#111827' }}>{biz}</span></>}
+                          {biz !== '—' && <><br /><span style={{ fontWeight: 600, color: '#111827' }}>{biz}</span></>}
                           {(addr || city) && (
                             <>
-                              <br/>
+                              <br />
                               <span style={{ fontSize: '11px', color: '#555' }}>
                                 {addr}{addr && city ? ', ' : ''}{city}
                               </span>
@@ -499,11 +528,11 @@ export default function RouteSheet() {
                             <option value="Resolved">Resolved</option>
                             <option value="Closed">Closed</option>
                           </select>
-                          <span 
-                            className="print-only" 
-                            style={{ 
-                              display: 'none', 
-                              fontWeight: 700, 
+                          <span
+                            className="print-only"
+                            style={{
+                              display: 'none',
+                              fontWeight: 700,
                               fontSize: '12px',
                               textTransform: 'uppercase'
                             }}
@@ -532,22 +561,22 @@ export default function RouteSheet() {
                 <form onSubmit={addReturn} className="ledger-form" style={{ marginTop: '16px' }}>
                   <label>
                     Cash returned (CAD)
-                    <input type="number" min="0" step="1" required value={rForm.amount} onChange={e=>setRForm(p=>({...p,amount:e.target.value}))} placeholder="e.g. 240" />
+                    <input type="number" min="0" step="1" required value={rForm.amount} onChange={e => setRForm(p => ({ ...p, amount: e.target.value }))} placeholder="e.g. 240" />
                   </label>
                   <label>
                     Terminal ID (Optional)
-                    <input type="text" value={rForm.terminalId} onChange={e=>setRForm(p=>({...p,terminalId:e.target.value}))} placeholder="e.g. CA101234" />
+                    <input type="text" value={rForm.terminalId} onChange={e => setRForm(p => ({ ...p, terminalId: e.target.value }))} placeholder="e.g. CA101234" />
                   </label>
                   <label>
                     Note (Optional)
-                    <input type="text" value={rForm.note} onChange={e=>setRForm(p=>({...p,note:e.target.value}))} placeholder="Why returned?" />
+                    <input type="text" value={rForm.note} onChange={e => setRForm(p => ({ ...p, note: e.target.value }))} placeholder="Why returned?" />
                   </label>
-                  {rMsg.text && <p className={rMsg.ok?'success':'error'} style={{margin:0}}>{rMsg.text}</p>}
-                  <button disabled={rSaving || loading} style={{marginTop: '8px'}}>{rSaving ? 'Saving...' : 'Record return \u2192'}</button>
+                  {rMsg.text && <p className={rMsg.ok ? 'success' : 'error'} style={{ margin: 0 }}>{rMsg.text}</p>}
+                  <button disabled={rSaving || loading} style={{ marginTop: '8px' }}>{rSaving ? 'Saving...' : 'Record return \u2192'}</button>
                 </form>
                 <div className="ledger-summary" style={{ marginTop: '20px' }}>
                   <b>Period total returned: ${(returns.reduce((sum, r) => sum + r.amount, 0)).toLocaleString()}</b>
-                  <span style={{fontSize:12,color:'#888',marginLeft:8}}>{returns.length} records</span>
+                  <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>{returns.length} records</span>
                 </div>
               </div>
 
@@ -555,30 +584,30 @@ export default function RouteSheet() {
                 <p className="eyebrow">RETURN HISTORY</p>
                 <h3>{agentDisplayName}'s Returns on {date}</h3>
                 {returnsLoading ? <p>Loading returns...</p> : returns.length === 0 ? (
-                  <p className="muted" style={{padding:'20px 0'}}>No returns recorded for {agentDisplayName} on {date}.</p>
+                  <p className="muted" style={{ padding: '20px 0' }}>No returns recorded for {agentDisplayName} on {date}.</p>
                 ) : (
-                  <div className="table-wrap" style={{border:'none',borderRadius:0,overflow:'visible',marginTop:'16px'}}>
+                  <div className="table-wrap" style={{ border: 'none', borderRadius: 0, overflow: 'visible', marginTop: '16px' }}>
                     <table className="rs-table">
                       <thead>
                         <tr>
-                          <th style={{width:'15%'}}>Time</th>
-                          <th style={{width:'15%'}}>Terminal</th>
-                          <th style={{width:'20%'}}>Amount</th>
-                          <th style={{width:'30%'}}>Note</th>
-                          <th style={{width:'15%'}}>By</th>
-                          <th style={{width:'5%'}}></th>
+                          <th style={{ width: '15%' }}>Time</th>
+                          <th style={{ width: '15%' }}>Terminal</th>
+                          <th style={{ width: '20%' }}>Amount</th>
+                          <th style={{ width: '30%' }}>Note</th>
+                          <th style={{ width: '15%' }}>By</th>
+                          <th style={{ width: '5%' }}></th>
                         </tr>
                       </thead>
                       <tbody>
                         {returns.map(r => (
                           <tr key={r._id}>
-                            <td style={{whiteSpace:'nowrap'}}>{new Date(r.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</td>
+                            <td style={{ whiteSpace: 'nowrap' }}>{new Date(r.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
                             <td><b>{r.terminalId || '—'}</b></td>
-                            <td><b style={{color:'#267249'}}>${(r.amount||0).toLocaleString()}</b></td>
-                            <td style={{fontSize:'12px', color:'#555'}}>{r.note || '—'}</td>
-                            <td style={{fontSize:'12px'}}>{r.recordedBy?.name}</td>
-                            <td style={{textAlign:'right'}}>
-                              <button className="del-btn" title="Delete" onClick={()=>delReturn(r._id)}>&#10005;</button>
+                            <td><b style={{ color: '#267249' }}>${(r.amount || 0).toLocaleString()}</b></td>
+                            <td style={{ fontSize: '12px', color: '#555' }}>{r.note || '—'}</td>
+                            <td style={{ fontSize: '12px' }}>{r.recordedBy?.name}</td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button className="del-btn" title="Delete" onClick={() => delReturn(r._id)}>&#10005;</button>
                             </td>
                           </tr>
                         ))}
@@ -591,7 +620,31 @@ export default function RouteSheet() {
           )}
         </div>
       )}
+
+      {confirmModal.open && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ background: '#fff', padding: '24px', borderRadius: '12px', width: '90%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '18px', color: '#173e36' }}>{confirmModal.title}</h3>
+            <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#4b5563', lineHeight: 1.5 }}>{confirmModal.message}</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button 
+                onClick={() => setConfirmModal({ ...confirmModal, open: false })} 
+                style={{ padding: '8px 16px', background: '#f1f5f3', color: '#4b5563', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmModal.onConfirm} 
+                style={{ padding: '8px 16px', background: '#a63e36', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 

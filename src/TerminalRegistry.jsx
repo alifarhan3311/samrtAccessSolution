@@ -85,12 +85,16 @@ export default function TerminalRegistry() {
   const { areas, cities, counts } = useMemo(() => {
     const aSet = new Set();
     const cSet = new Set();
-    const cnt = { total: data.items.length, active: 0, inactive: 0, spare: 0, pending: 0 };
+    const cnt = { total: data.items.length, active: 0, inactive: 0, spare: 0, pending: 0, neverComm: 0 };
 
     for (const t of data.items) {
       if (t.official?.locationArea) aSet.add(t.official.locationArea);
       const city = t.current?.city || t.original?.city || t.official?.city;
       if (city) cSet.add(city);
+
+      if (t.official?.lastCommunication === 'Never Communicated') {
+        cnt.neverComm++;
+      }
 
       const st = (t.official?.status || '').toLowerCase();
       if (st === 'active') cnt.active++;
@@ -111,7 +115,11 @@ export default function TerminalRegistry() {
     return data.items.filter(t => {
       // Status filter
       if (statusFilter !== 'all') {
-        if ((t.official?.status || '').toLowerCase() !== statusFilter.toLowerCase()) return false;
+        if (statusFilter === 'NeverCommunicated') {
+          if (t.official?.lastCommunication !== 'Never Communicated') return false;
+        } else {
+          if ((t.official?.status || '').toLowerCase() !== statusFilter.toLowerCase()) return false;
+        }
       }
       // Area filter
       if (areaFilter !== 'all' && t.official?.locationArea !== areaFilter) {
@@ -257,6 +265,7 @@ export default function TerminalRegistry() {
             ['Inactive', 'Inactive',    counts.inactive],
             ['Spare',    'Spare',       counts.spare],
             ['Pending',  'Pending',     counts.pending],
+            ['NeverCommunicated', 'Never Comm.', counts.neverComm],
           ].map(([st, lbl, cnt]) => (
             <button
               key={st}

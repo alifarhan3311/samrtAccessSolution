@@ -120,43 +120,124 @@
 }
 
 @media print {
-  @page { margin: 10mm; size: landscape; }
-  body * {
-    visibility: hidden;
+  @page {
+    margin: 10mm;
+    size: landscape;
   }
-  .rs-paper, .rs-paper * {
-    visibility: visible;
+
+  /* ── Body & background ── */
+  body {
+    background: #fff !important;
+    overflow: visible !important;
   }
-  .rs-paper {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    box-shadow: none;
-    border-radius: 0;
+
+  /* ── Hide the app shell: sidebar (aside) + top header ── */
+  aside,
+  header,
+  nav {
+    display: none !important;
   }
+
+  /* ── Reset the shell wrapper so it doesn't clip content ── */
+  .shell {
+    display: block !important;
+    overflow: visible !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ── The content section should fill the full page ── */
+  .content {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: unset !important;
+    grid-column: 1 / -1 !important;
+  }
+
+  /* ── Hide any element marked no-print ── */
   .no-print {
     display: none !important;
   }
+
+  /* ── Outer route-sheet-page wrapper ── */
+  .route-sheet-page {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* ── White paper section: fill full printed page ── */
+  .rs-paper {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 12px !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    page-break-inside: auto;
+  }
+
+  /* ── Show print-only text (e.g. ticket status instead of dropdown) ── */
   .print-only {
     display: inline !important;
   }
-  aside { display: none !important; }
-  header { display: none !important; }
-  
-  /* Ensure inputs print just like plain text */
+
+  /* ── Tables ── */
+  .rs-table {
+    width: 100% !important;
+    font-size: 11px !important;
+    border-collapse: collapse !important;
+  }
+
+  .rs-table th,
+  .rs-table td {
+    border: 1px solid #000 !important;
+    padding: 5px 6px !important;
+  }
+
+  .rs-tickets-table th,
+  .rs-tickets-table td {
+    border: 1px solid #000 !important;
+  }
+
+  /* ── Inputs print as readable values ── */
   .rs-input {
-    color: #000;
-    font-size: 12px;
-    font-weight: normal;
+    color: #000 !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
+
   .rs-input::placeholder {
-    color: transparent;
+    color: transparent !important;
   }
-  .rs-tickets-table th, .rs-tickets-table td {
-    border: 1px solid #000;
+
+  /* ── Area row shading ── */
+  .rs-area-row td {
+    background: #e8e8e8 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── Comment/note badge colors ── */
+  .rs-dba-cell div {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── No page breaks mid-row ── */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* ── Section title ── */
+  .rs-section-title {
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    margin-bottom: 6px !important;
   }
 }
 

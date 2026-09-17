@@ -24,6 +24,7 @@ export default function AreaDispatch({done}){
   const[showSingleDispatch, setShowSingleDispatch] = useState(false);
 
   const [ticketModal, setTicketModal] = useState(null);
+  const [openDropdown, setOpenDropdown] = useState(null);
   const [tForm, setTForm] = useState({ problem: '', assignedTo: '' });
   const [tSubmitting, setTSubmitting] = useState(false);
 
@@ -55,6 +56,12 @@ export default function AreaDispatch({done}){
       .then(([a,g,b])=>{setAreas(a);setAgents(g);if(b)setBal(b);})
       .finally(()=>setInitialLoading(false));
   },[]);
+
+  useEffect(() => {
+    const closeDropdown = () => setOpenDropdown(null);
+    window.addEventListener('click', closeDropdown);
+    return () => window.removeEventListener('click', closeDropdown);
+  }, []);
 
   async function loadTerminalsForAreas(areaList, targetDate = form.dueAt, keepMsg = false){
     setSelectedAreas(areaList);setSelected([]);setTerminals([]);setCashOverrides({});setAgentOverrides({});setNoteOverrides({});
@@ -250,12 +257,28 @@ export default function AreaDispatch({done}){
         </div>
       </div>
 
-      <div className="area-fields area-fields-2col">
-        <label>Default Agent (Sets for all ATMs)
-          <select value={form.agentId} onChange={e=>handleGlobalAgentChange(e.target.value)}>
-            <option value="">Select default agent...</option>
-            {agents.map(a=><option key={a._id} value={a._id}>{a.name} — {a.openJobs} open jobs</option>)}
-          </select>
+      <div className="area-fields area-fields-2col" style={{position: 'relative', zIndex: openDropdown === 'global' ? 100 : 2}}>
+        <label style={{position:'relative'}}>Default Agent (Sets for all ATMs)
+          <div className="custom-select-pill" style={{marginTop: 7, height: 42, background: '#fff', border: '1px solid #d8dfda', borderRadius: 8, padding: '0 12px', display: 'flex', alignItems: 'center', cursor: 'pointer', position: 'relative'}} onClick={(e) => { e.stopPropagation(); setOpenDropdown(openDropdown === 'global' ? null : 'global'); }}>
+            <div className="custom-select-value" style={{fontSize: 14, fontWeight: 500}}>
+              {form.agentId ? agents.find(a => a._id === form.agentId)?.name || 'Select default agent...' : 'Select default agent...'}
+            </div>
+            <span className="agent-chevron" style={{ position: 'static', transform: openDropdown === 'global' ? 'rotate(180deg)' : 'none', marginLeft: 'auto' }}>▾</span>
+            
+            {openDropdown === 'global' && (
+              <div className="custom-agent-dropdown" style={{ top: '100%', marginTop: 4 }}>
+                <div className="agent-option" onClick={() => handleGlobalAgentChange('')}>
+                  <span style={{opacity:0.6}}>Select default agent...</span>
+                </div>
+                {agents.map(a => (
+                  <div key={a._id} className={`agent-option ${form.agentId === a._id ? 'selected' : ''}`} onClick={() => handleGlobalAgentChange(a._id)}>
+                    {a.name} <span style={{marginLeft: 8, fontSize: 10, color: '#7f8983', fontWeight: 500}}>— {a.openJobs} open jobs</span>
+                    {form.agentId === a._id && <span style={{marginLeft:'auto', color:'#10b981'}}>✓</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </label>
         <label>Complete before
           <input type="date" value={form.dueAt} onChange={e=>handleDateChange(e.target.value)} required/>
@@ -339,7 +362,7 @@ export default function AreaDispatch({done}){
           const withOutdated = isOlderThan3Days(t.official?.lastWithdrawalAt);
           const isDisconnected = commOutdated || withOutdated;
 
-          return <div key={t.terminalId} className={`area-atm-row ${isDisabled?'locked-atm':''}`} style={isDisconnected ? { background: '#fef2f2', border: '1px solid #f87171', borderLeft: '5px solid #ef4444' } : {}}>
+          return <div key={t.terminalId} className={`area-atm-row ${isDisabled?'locked-atm':''}`} style={{ ...(isDisconnected ? { background: '#fef2f2', border: '1px solid #f87171', borderLeft: '5px solid #ef4444' } : {}), position: 'relative', zIndex: openDropdown === t.terminalId ? 50 : 1 }}>
             <input type="checkbox" disabled={isDisabled} checked={isSelected} onChange={()=>toggle(t.terminalId)}/>
             <div>
               <b>{t.terminalId} · {t.official?.tempName || t.official?.name} {isInactive&&<span style={{color:'#a63e36',fontSize:11,fontWeight:800,marginLeft:6}}>(INACTIVE)</span>}</b>
@@ -364,7 +387,7 @@ export default function AreaDispatch({done}){
             ) : t.activeJob ? (
               <div style={{gridColumn: 'span 3', textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
                 <strong style={{color:'#999'}}>Assigned: {t.activeJob.agent?.name}</strong>
-                {t.activeJob.dueAt && <small style={{color:'#a5b0aa', fontSize: '10px', marginTop: '2px'}}>Due: {getTorontoDateString(new Date(t.activeJob.dueAt))}</small>}
+                {t.activeJob.dueAt && <small style={{color:'#a5b0aa', fontSize: '10px', marginTop: '2px'}}>Due: {getTorontoDateString(t.activeJob.dueAt)}</small>}
               </div>
             ) : (
               <>
@@ -384,19 +407,28 @@ export default function AreaDispatch({done}){
                 </div>
                 <div className="agent-select-wrap">
                   <small className="agent-select-label">ASSIGNED AGENT</small>
-                  <div className={`agent-pill-box ${assignedAgent ? 'has-agent' : ''} ${!isSelected ? 'disabled' : ''}`}>
+                  <div className={`agent-pill-box custom-select-pill ${assignedAgent ? 'has-agent' : ''} ${!isSelected ? 'disabled' : ''}`}
+                       onClick={(e) => { e.stopPropagation(); if (isSelected) setOpenDropdown(openDropdown === t.terminalId ? null : t.terminalId); }}
+                  >
                     <span className="agent-avatar-icon">👤</span>
-                    <select
-                      value={assignedAgent}
-                      onChange={e=>handleRowAgentChange(t.terminalId, e.target.value)}
-                      disabled={!isSelected}
-                      onClick={e=>e.stopPropagation()}
-                      required={isSelected}
-                    >
-                      <option value="">Choose Agent...</option>
-                      {agents.map(a=><option key={a._id} value={a._id}>{a.name}</option>)}
-                    </select>
-                    <span className="agent-chevron">▾</span>
+                    <div className="custom-select-value">
+                      {assignedAgent ? agents.find(a => a._id === assignedAgent)?.name || 'Choose Agent...' : 'Choose Agent...'}
+                    </div>
+                    <span className="agent-chevron" style={{ transform: openDropdown === t.terminalId ? 'rotate(180deg)' : 'none' }}>▾</span>
+                    
+                    {openDropdown === t.terminalId && (
+                      <div className="custom-agent-dropdown">
+                        <div className="agent-option" onClick={() => handleRowAgentChange(t.terminalId, '')}>
+                          <span style={{opacity:0.6}}>Choose Agent...</span>
+                        </div>
+                        {agents.map(a => (
+                          <div key={a._id} className={`agent-option ${assignedAgent === a._id ? 'selected' : ''}`} onClick={() => handleRowAgentChange(t.terminalId, a._id)}>
+                            {a.name}
+                            {assignedAgent === a._id && <span style={{marginLeft:'auto', color:'#10b981'}}>✓</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

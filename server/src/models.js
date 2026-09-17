@@ -50,7 +50,7 @@ const agentJobSchema = new mongoose.Schema({
   terminal: { type: mongoose.Schema.Types.ObjectId, ref: 'Terminal', required: true, index: true }, terminalId: { type: String, required: true, index: true },
   agent: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true }, assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   businessName: String, address: String, city: String, wishAmount: { type: Number, min: 0, default: 0 }, cashToLoad: { type: Number, min: 0, required: true },
-  dueAt: { type: Date, required: true, index: true }, status: { type: String, enum: ['assigned','accepted','travelling','cash_loaded','issue_reported','approved','cancelled'], default: 'assigned', index: true },
+  dueAt: { type: Date, required: true, index: true }, status: { type: String, enum: ['assigned', 'accepted', 'travelling', 'cash_loaded', 'issue_reported', 'approved', 'cancelled'], default: 'assigned', index: true },
   events: [jobEventSchema], approvedAt: Date, approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   routeExistingCash: Number, routeCashLoaded: Number, routeLoadTime: String,
   routeBillsRemaining: Number, routeCashToLoad: Number
@@ -58,49 +58,49 @@ const agentJobSchema = new mongoose.Schema({
 
 // Cash withdrawn from bank by admin
 const cashWithdrawalSchema = new mongoose.Schema({
-  amount:      { type: Number, required: true, min: 1 },
-  note:        { type: String, maxlength: 500 },
+  amount: { type: Number, required: true, min: 1 },
+  note: { type: String, maxlength: 500 },
   withdrawnBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  date:        { type: Date, default: Date.now, index: true },
+  date: { type: Date, default: Date.now, index: true },
 }, { timestamps: true });
 
 // Cash returned by agent after job(s) — unspent cash credited back
 const cashReturnSchema = new mongoose.Schema({
-  agent:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  amount:      { type: Number, required: true, min: 0 },
-  jobIds:      [{ type: mongoose.Schema.Types.ObjectId, ref: 'AgentJob' }], // jobs this return is linked to
-  terminalId:  { type: String }, // specific terminal this return is for
-  note:        { type: String, maxlength: 500 },
-  recordedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  date:        { type: Date, default: Date.now, index: true },
+  agent: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  amount: { type: Number, required: true, min: 0 },
+  jobIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'AgentJob' }], // jobs this return is linked to
+  terminalId: { type: String }, // specific terminal this return is for
+  note: { type: String, maxlength: 500 },
+  recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  date: { type: Date, default: Date.now, index: true },
 }, { timestamps: true });
 
 // Cash discrepancy — detected on import by comparing expected vs actual ATM balance
 const cashDiscrepancySchema = new mongoose.Schema({
-  terminalId:       { type: String, required: true, index: true },
-  terminal:         { type: mongoose.Schema.Types.ObjectId, ref: 'Terminal' },
-  job:              { type: mongoose.Schema.Types.ObjectId, ref: 'AgentJob' },
-  agent:            { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  importRunId:      { type: mongoose.Schema.Types.ObjectId, ref: 'ImportRun' },
+  terminalId: { type: String, required: true, index: true },
+  terminal: { type: mongoose.Schema.Types.ObjectId, ref: 'Terminal' },
+  job: { type: mongoose.Schema.Types.ObjectId, ref: 'AgentJob' },
+  agent: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  importRunId: { type: mongoose.Schema.Types.ObjectId, ref: 'ImportRun' },
   balanceBeforeJob: { type: Number, default: 0 },   // ATM balance snapshot before job
-  cashLoadedByAgent:{ type: Number, default: 0 },   // agent reported
-  expectedBalance:  { type: Number, default: 0 },   // balanceBeforeJob + cashLoadedByAgent
-  actualBalance:    { type: Number, default: 0 },   // this import's cashBalance
-  discrepancy:      { type: Number, default: 0 },   // expectedBalance - actualBalance (positive = shortfall)
-  status:    { type: String, enum: ['open','resolved','dismissed'], default: 'open', index: true },
-  resolvedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  resolvedAt:  Date,
+  cashLoadedByAgent: { type: Number, default: 0 },   // agent reported
+  expectedBalance: { type: Number, default: 0 },   // balanceBeforeJob + cashLoadedByAgent
+  actualBalance: { type: Number, default: 0 },   // this import's cashBalance
+  discrepancy: { type: Number, default: 0 },   // expectedBalance - actualBalance (positive = shortfall)
+  status: { type: String, enum: ['open', 'resolved', 'dismissed'], default: 'open', index: true },
+  resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  resolvedAt: Date,
   resolveNote: { type: String, maxlength: 1000 },
-  detectedAt:  { type: Date, default: Date.now, index: true },
+  detectedAt: { type: Date, default: Date.now, index: true },
 }, { timestamps: true });
 
 // Ticket generated by agent or admin for a terminal issue
 const ticketSchema = new mongoose.Schema({
-  terminalId:  { type: String, required: true, index: true },
-  problem:     { type: String, required: true, maxlength: 2000 },
-  status:      { type: String, enum: ['Open', 'In Progress', 'Resolved', 'Closed'], default: 'Open', index: true },
+  terminalId: { type: String, required: true, index: true },
+  problem: { type: String, required: true, maxlength: 2000 },
+  status: { type: String, enum: ['Open', 'In Progress', 'Resolved', 'Closed'], default: 'Open', index: true },
   generatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  assignedTo:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   resolutionNote: { type: String, maxlength: 2000 },
 }, { timestamps: true });
 
@@ -165,7 +165,7 @@ const atmInstallationSchema = new mongoose.Schema({
 
 const atmAgreementSchema = new mongoose.Schema({
   terminalId: { type: String, required: true, index: true },
-  
+
   // Customer / Business Details
   customerName: String,
   address: String,
@@ -186,13 +186,13 @@ const atmAgreementSchema = new mongoose.Schema({
   mhSignature: String,
   mhName: String,
   mhDesignation: String,
-  
+
   customerSignature: String,
   customerNameOwner: String,
   customerDriversLic: String,
   customerTelephone: String,
   customerHomeAddress: String,
-  
+
   remarks: String,
   documentUrl: String,
   documentFile: {
@@ -247,17 +247,17 @@ const atmSetupSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = {
-  Terminal:           mongoose.model('Terminal', terminalSchema),
-  User:               mongoose.model('User', userSchema),
-  Audit:              mongoose.model('Audit', auditSchema),
-  ImportRun:          mongoose.model('ImportRun', importSchema),
-  AgentJob:           mongoose.model('AgentJob', agentJobSchema),
-  CashWithdrawal:     mongoose.model('CashWithdrawal', cashWithdrawalSchema),
-  CashReturn:         mongoose.model('CashReturn', cashReturnSchema),
-  CashDiscrepancy:    mongoose.model('CashDiscrepancy', cashDiscrepancySchema),
-  Ticket:             mongoose.model('Ticket', ticketSchema),
-  AtmInstallation:    mongoose.model('AtmInstallation', atmInstallationSchema),
-  AtmAgreement:       mongoose.model('AtmAgreement', atmAgreementSchema),
-  AtmRemoval:         mongoose.model('AtmRemoval', atmRemovalSchema),
-  AtmSetup:           mongoose.model('AtmSetup', atmSetupSchema),
+  Terminal: mongoose.model('Terminal', terminalSchema),
+  User: mongoose.model('User', userSchema),
+  Audit: mongoose.model('Audit', auditSchema),
+  ImportRun: mongoose.model('ImportRun', importSchema),
+  AgentJob: mongoose.model('AgentJob', agentJobSchema),
+  CashWithdrawal: mongoose.model('CashWithdrawal', cashWithdrawalSchema),
+  CashReturn: mongoose.model('CashReturn', cashReturnSchema),
+  CashDiscrepancy: mongoose.model('CashDiscrepancy', cashDiscrepancySchema),
+  Ticket: mongoose.model('Ticket', ticketSchema),
+  AtmInstallation: mongoose.model('AtmInstallation', atmInstallationSchema),
+  AtmAgreement: mongoose.model('AtmAgreement', atmAgreementSchema),
+  AtmRemoval: mongoose.model('AtmRemoval', atmRemovalSchema),
+  AtmSetup: mongoose.model('AtmSetup', atmSetupSchema),
 };
