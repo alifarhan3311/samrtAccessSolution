@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getTorontoDateString } from './timezone';
 import LoadingSpinner from './LoadingSpinner.jsx';
 import './agent-jobs.css';
 
@@ -59,9 +60,9 @@ function jobsToCSV(jobs) {
       job.agent?.name || '', job.assignedBy?.name || '',
       job.wishAmount ?? '', job.cashToLoad ?? '',
       loadedEvent?.cashLoaded ?? '',
-      job.dueAt      ? new Date(job.dueAt).toLocaleDateString('en-CA')      : '',
-      job.approvedAt ? new Date(job.approvedAt).toLocaleDateString('en-CA') : '',
-      job.createdAt  ? new Date(job.createdAt).toLocaleDateString('en-CA')  : '',
+      job.dueAt      ? getTorontoDateString(job.dueAt)      : '',
+      job.approvedAt ? getTorontoDateString(job.approvedAt) : '',
+      job.createdAt  ? getTorontoDateString(job.createdAt)  : '',
       job.locationArea || '',
       allNotes,
     ].map(v => v === '' || v == null ? '' : `"${String(v).replace(/"/g, '""')}"`);
@@ -73,7 +74,7 @@ function downloadCSV(jobs) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `agent-jobs-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `agent-jobs-${getTorontoDateString()}.csv`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
@@ -269,7 +270,7 @@ export default function AgentJobs({ role }) {
                       <td>{money(job.cashToLoad)}</td>
                       <td>{loadedEv ? <b style={{ color: '#16a34a' }}>{money(loadedEv.cashLoaded)}</b> : '—'}</td>
                       <td>{job.agent?.name || '—'}</td>
-                      <td>{new Date(job.dueAt).toLocaleDateString('en-CA')}</td>
+                      <td>{getTorontoDateString(job.dueAt)}</td>
                       <td style={{ display: 'flex', gap: '8px' }}>
                         <button className="link" onClick={() => setSelected(job)} disabled={!!actionLoading}>
                           View details
@@ -367,12 +368,12 @@ function JobDetailModal({ job, admin, onClose, onApprove, onProof, onUpdate }) {
           <div><small>CASH TO LOAD</small><span>${job.cashToLoad?.toLocaleString()}</span></div>
           <div>
             <small>DUE AT</small>
-            <span>{job.dueAt ? new Date(job.dueAt).toLocaleDateString('en-CA') : '—'}</span>
+            <span>{job.dueAt ? getTorontoDateString(job.dueAt) : '—'}</span>
           </div>
           {job.approvedAt && (
             <div>
               <small>APPROVED AT</small>
-              <span>{new Date(job.approvedAt).toLocaleDateString('en-CA')}</span>
+              <span>{getTorontoDateString(job.approvedAt)}</span>
             </div>
           )}
         </div>
@@ -385,7 +386,7 @@ function JobDetailModal({ job, admin, onClose, onApprove, onProof, onUpdate }) {
               <span className="aj-dm-dot" style={{ background: STATUS_COLOR[ev.status] || '#78958e' }} />
               <div className="aj-dm-event-body">
                 <b>{STATUS_LABEL[ev.status] || ev.status}</b>
-                <time>{new Date(ev.createdAt).toLocaleDateString('en-CA')} · {ev.createdBy?.name}</time>
+                <time>{getTorontoDateString(ev.createdAt)} · {ev.createdBy?.name}</time>
                 {ev.note && <p>{ev.note}</p>}
                 {ev.cashLoaded != null && (
                   <p className="aj-dm-cash-loaded">

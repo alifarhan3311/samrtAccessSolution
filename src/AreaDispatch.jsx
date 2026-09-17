@@ -1,9 +1,9 @@
 import React,{useEffect,useState}from'react';
 import LoadingSpinner from './LoadingSpinner.jsx';
-import { getTorontoDateString } from './timezone';
+import { getTorontoDateString, isOlderThan3Days } from './timezone';
 const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 const money2=v=>'$'+Number(v||0).toLocaleString();
-const fmt=v=>v?new Date(v).toLocaleDateString('en-CA'):'N/A';
+const fmt=v=>v?getTorontoDateString(v):'N/A';
 
 import DailyDispatch from './DailyDispatch.jsx';
 
@@ -129,7 +129,7 @@ export default function AreaDispatch({done}){
   async function send(e){
     e.preventDefault();
     try{
-      const ld=new Date();const localDate=`${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
+      const localDate=getTorontoDateString();
       const result=await req('/jobs/dispatch-area',{method:'POST',body:JSON.stringify({
         ...form,
         locationAreas:selectedAreas,
@@ -335,17 +335,9 @@ export default function AreaDispatch({done}){
           const currentBills=Math.floor(currentCad/20);
           const assignedAgent=agentOverrides[t.terminalId]||form.agentId||'';
 
-          let isDisconnected = false;
-          if (t.official?.lastCommunication) {
-            // some formats are "12/25/25 01:47", JS Date parser can handle them
-            const commDate = new Date(t.official.lastCommunication);
-            if (!isNaN(commDate.getTime())) {
-              const diffHours = (new Date() - commDate) / (1000 * 60 * 60);
-              if (diffHours > 72) {
-                isDisconnected = true;
-              }
-            }
-          }
+          const commOutdated = isOlderThan3Days(t.official?.lastCommunication);
+          const withOutdated = isOlderThan3Days(t.official?.lastWithdrawalAt);
+          const isDisconnected = commOutdated || withOutdated;
 
           return <div key={t.terminalId} className={`area-atm-row ${isDisabled?'locked-atm':''}`} style={isDisconnected ? { background: '#fef2f2', border: '1px solid #f87171', borderLeft: '5px solid #ef4444' } : {}}>
             <input type="checkbox" disabled={isDisabled} checked={isSelected} onChange={()=>toggle(t.terminalId)}/>
@@ -353,8 +345,8 @@ export default function AreaDispatch({done}){
               <b>{t.terminalId} · {t.official?.tempName || t.official?.name} {isInactive&&<span style={{color:'#a63e36',fontSize:11,fontWeight:800,marginLeft:6}}>(INACTIVE)</span>}</b>
               <span>{t.current?.address||t.official?.address} · {t.current?.city||t.official?.city} &nbsp; <span style={{background:'#edf2f0',padding:'1px 6px',borderRadius:8,fontWeight:700,fontSize:10,color:'#357064'}}>{t.official?.locationArea}</span></span>
               <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, color: '#555', alignItems: 'center' }}>
-                <span>Last Withdrawal: <strong style={{color:'#183d36'}}>{fmt(t.official?.lastWithdrawalAt)}</strong></span>
-                <span>Last Comm: <strong style={{color: isDisconnected ? '#dc2626' : '#183d36'}}>{t.official?.lastCommunication || 'N/A'}</strong></span>
+                <span>Last Withdrawal: <strong style={{color: withOutdated ? '#dc2626' : '#183d36'}}>{fmt(t.official?.lastWithdrawalAt)}</strong></span>
+                <span>Last Comm: <strong style={{color: commOutdated ? '#dc2626' : '#183d36'}}>{t.official?.lastCommunication || 'N/A'}</strong></span>
                 <button type="button" onClick={() => setTicketModal(t.terminalId)} style={{ padding: '2px 8px', fontSize: 10, background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>🎫 Create Ticket</button>
               </div>
             </div>
@@ -372,7 +364,7 @@ export default function AreaDispatch({done}){
             ) : t.activeJob ? (
               <div style={{gridColumn: 'span 3', textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
                 <strong style={{color:'#999'}}>Assigned: {t.activeJob.agent?.name}</strong>
-                {t.activeJob.dueAt && <small style={{color:'#a5b0aa', fontSize: '10px', marginTop: '2px'}}>Due: {new Date(t.activeJob.dueAt).toLocaleDateString('en-CA')}</small>}
+                {t.activeJob.dueAt && <small style={{color:'#a5b0aa', fontSize: '10px', marginTop: '2px'}}>Due: {getTorontoDateString(new Date(t.activeJob.dueAt))}</small>}
               </div>
             ) : (
               <>

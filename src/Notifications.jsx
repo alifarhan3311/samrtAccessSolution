@@ -2,10 +2,11 @@ import React,{useEffect,useState}from'react';
 import LoadingSpinner from './LoadingSpinner.jsx';
 import AssignTerminal from './AssignTerminal.jsx';
 import './atm-forms.css';
+import { getTorontoDateString } from './timezone';
 
 const auth=()=>({Authorization:`Bearer ${localStorage.getItem('token')}`});
 const names={status:'Status',tempName:'Temp Name',name:'Business Name',address:'Address',city:'City',locationArea:'Location Area',wishAmount:'Wish Amount',cashBalance:'Cash Balance',cashLoading:'Cash Loading',agent:'Agent',notesTask:'Notes/Task',lastCommunication:'Last Communication',lastWithdrawalAt:'Last Withdrawal Date'};
-const value=v=>v instanceof Date?new Date(v).toLocaleDateString('en-CA'):v===null||v===undefined||v===''?'Empty':String(v);
+const value=v=>v instanceof Date?getTorontoDateString(v):v===null||v===undefined||v===''?'Empty':String(v);
 
 export function getSetupNeeds(t) {
   const needs = [];
@@ -156,7 +157,7 @@ export default function Notifications({go}){
       </div>
       <div className="notice-orb">{data.total}</div>
     </div>
-    {data.latestImport&&<div className="latest-import"><span>Latest upload</span><b>{data.latestImport.fileName}</b><small>{new Date(data.latestImport.createdAt).toLocaleDateString('en-CA')}</small></div>}
+    {data.latestImport&&<div className="latest-import"><span>Latest upload</span><b>{data.latestImport.fileName}</b><small>{getTorontoDateString(data.latestImport.createdAt)}</small></div>}
     
     <div className="notice-tabs">
       <button className={tab==='changes'?'active':''} onClick={()=>{setTab('changes');setSetupFilter('all');setCityFilter('all');}}>Latest changes <b>{data.recentChanges?.length||0}</b></button>
@@ -332,7 +333,7 @@ export default function Notifications({go}){
         <div className="notice-copy">
           <div><b>{t.terminalId}</b><span style={{ background: '#e0f2fe', color: '#0369a1' }}>{t.status}</span></div>
           <h3>{t.problem}</h3>
-          <p>Reported by <b>{t.generatedBy?.name || 'User'}</b> on {new Date(t.createdAt).toLocaleDateString('en-CA')}. Currently unassigned.</p>
+          <p>Reported by <b>{t.generatedBy?.name || 'User'}</b> on {getTorontoDateString(t.createdAt)}. Currently unassigned.</p>
         </div>
         <button onClick={()=>go('tickets')} style={{ background: '#357064', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>
           Assign Agent →

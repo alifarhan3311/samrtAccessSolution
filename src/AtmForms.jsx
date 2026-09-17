@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { getTorontoDateTime } from './timezone';
 import AtmInstallationForm from './AtmInstallationForm.jsx';
 import AtmAgreementForm from './AtmAgreementForm.jsx';
 import AtmRemovalForm from './AtmRemovalForm.jsx';
@@ -29,11 +30,7 @@ export default function AtmForms() {
   const [uploadForm, setUploadForm] = useState({
     terminalId: '',
     formType: 'installation',
-    date: () => {
-      const now = new Date();
-      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-      return now.toISOString().slice(0, 16);
-    },
+    date: () => getTorontoDateTime(),
     locationName: '',
     remarks: ''
   });
@@ -179,7 +176,7 @@ export default function AtmForms() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span className="timeline-date">
-                {new Date(event.date).toLocaleDateString()} {new Date(event.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {getTorontoDateTime(event.date).replace('T', ' ')}
               </span>
               
               <button 

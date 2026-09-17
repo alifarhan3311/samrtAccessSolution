@@ -15,8 +15,9 @@ async function req(path, options = {}) {
   return d;
 }
 
+import { getTorontoDateString } from './timezone';
 const show = v => (v === 0 ? 0 : v || '—');
-const fmt  = v => v ? new Date(v).toLocaleDateString('en-CA') : '—';
+const fmt  = v => v ? getTorontoDateString(v) : '—';
 
 export default function TerminalRegistry() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');

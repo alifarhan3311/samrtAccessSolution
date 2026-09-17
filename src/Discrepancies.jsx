@@ -2,7 +2,8 @@ import React,{useEffect,useState}from'react';
 import LoadingSpinner from './LoadingSpinner.jsx';
 const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...(o.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 const money=v=>'$'+Number(v||0).toLocaleString();
-const fmt=v=>v?new Date(v).toLocaleDateString('en-CA',{dateStyle:'medium'}):'—';
+import { getTorontoDateMedium } from './timezone';
+const fmt=v=>v?getTorontoDateMedium(v):'—';
 
 export default function Discrepancies(){
   const[data,setData]=useState({items:[],openCount:0,totalShortfall:0});

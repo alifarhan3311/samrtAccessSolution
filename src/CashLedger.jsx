@@ -9,8 +9,8 @@ const req=async(p,o={})=>{
 };
 
 const money=v=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD',maximumFractionDigits:0}).format(v||0);
-const fmt=v=>v?new Date(v).toLocaleDateString('en-CA',{dateStyle:'medium'}):'—';
-import { getTorontoDateString } from './timezone';
+const fmt=v=>v?getTorontoDateMedium(v):'—';
+import { getTorontoDateString, getTorontoDateMedium } from './timezone';
 
 const todayStr = () => getTorontoDateString();
 const monthStartStr = () => {

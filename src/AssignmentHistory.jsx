@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { getTorontoDateString } from './timezone';
 import * as XLSX from 'xlsx';
 import LoadingSpinner from './LoadingSpinner.jsx';
 import './history.css';
 
 const money = v => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(v || 0);
-const when  = v => v ? new Date(v).toLocaleDateString('en-CA') : 'Current';
+const when  = v => v ? getTorontoDateString(v) : 'Current';
 
 async function loadHistory(filters) {
   const query = new URLSearchParams({ ...filters, limit: '5000' });
@@ -57,7 +58,7 @@ export default function AssignmentHistory() {
     ];
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, sheet, 'Assignment History');
-    XLSX.writeFile(book, `ATM-Assignment-History-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(book, `ATM-Assignment-History-${getTorontoDateString()}.xlsx`);
   }
 
   // decide badge color for "current" vs ended assignments
@@ -147,8 +148,8 @@ export default function AssignmentHistory() {
                         {isCurrent(item) ? 'Current' : 'Ended'}
                       </span>
                     </td>
-                    <td>{item.assignedAt ? new Date(item.assignedAt).toLocaleDateString('en-CA') : '—'}</td>
-                    <td>{item.endedAt ? new Date(item.endedAt).toLocaleDateString('en-CA') : '—'}</td>
+                    <td>{item.assignedAt ? getTorontoDateString(item.assignedAt) : '—'}</td>
+                    <td>{item.endedAt ? getTorontoDateString(item.endedAt) : '—'}</td>
                     <td>{item.assignedBy || 'Unknown'}</td>
                   </tr>
                 ))}
