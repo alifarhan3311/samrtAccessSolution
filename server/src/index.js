@@ -129,7 +129,7 @@ app.get('/api/notifications', auth, async (req, res, next) => {
       ImportRun.findOne().sort({ createdAt: -1 }).select('fileName changes totals createdAt').lean(),
       Ticket.find({ $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }], status: { $ne: 'Closed' } }).sort({ createdAt: -1 }).limit(100).populate('generatedBy', 'name email').lean()
     ]);
-    const recentChanges = latestImport?.changes || [];
+    const recentChanges = (latestImport?.changes || []).slice(0, 50);
     res.json({
       setup,
       lowCash,
@@ -137,7 +137,7 @@ app.get('/api/notifications', auth, async (req, res, next) => {
       unassignedTickets: unassignedTickets || [],
       recentChanges,
       latestImport: latestImport ? { fileName: latestImport.fileName, createdAt: latestImport.createdAt, totals: latestImport.totals } : null,
-      total: setup.length + lowCash.length + missing.length + recentChanges.length + (unassignedTickets?.length || 0)
+      total: setup.length + lowCash.length + missing.length + (unassignedTickets?.length || 0)
     });
   } catch (e) { next(e) }
 });
