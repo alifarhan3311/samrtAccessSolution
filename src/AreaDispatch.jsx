@@ -22,6 +22,7 @@ export default function AreaDispatch({done}){
   const[loadingTerminals,setLoadingTerminals]=useState(false);
   const[initialLoading,setInitialLoading]=useState(true);
   const[showSingleDispatch, setShowSingleDispatch] = useState(false);
+  const[submitting, setSubmitting] = useState(false);
 
   const [ticketModal, setTicketModal] = useState(null);
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -135,6 +136,8 @@ export default function AreaDispatch({done}){
 
   async function send(e){
     e.preventDefault();
+    if(submitting) return;
+    setSubmitting(true);
     try{
       const localDate=getTorontoDateString();
       const result=await req('/jobs/dispatch-area',{method:'POST',body:JSON.stringify({
@@ -149,7 +152,7 @@ export default function AreaDispatch({done}){
       })});
       setMsg(`${result.assigned} ATMs assigned across ${selectedAreas.length} area(s). Total cash: $${result.totalCash.toLocaleString()}. ${result.skippedLocked} locked ATM(s) skipped.`);
       loadTerminalsForAreas(selectedAreas, form.dueAt, true);
-    }catch(e){setMsg(e.message);}
+    }catch(e){setMsg(e.message);}finally{setSubmitting(false);}
   }
 
   const total=selected.reduce((s,id)=>s+(cashOverrides[id]||0),0);
@@ -458,9 +461,15 @@ export default function AreaDispatch({done}){
         <textarea value={form.note} onChange={e=>setForm({...form,note:e.target.value})}/>
       </label>
       {msg&&<p className={msg.includes('assigned')?'success':'error'}>{msg}</p>}
-      <button className="dispatch-area" disabled={!selected.length||!allAssigned||!form.dueAt||overBudget}>
-        {overBudget
-          ?`Insufficient balance — need ${money2(total-available)} more`
+      {overBudget&&!submitting&&(
+        <div style={{background:'#fff3cd',border:'1px solid #ffc107',borderRadius:8,padding:'10px 14px',marginBottom:8,fontSize:13,color:'#856404',display:'flex',alignItems:'center',gap:8}}>
+          <span style={{fontSize:16}}>⚠️</span>
+          <span><b>Balance Warning:</b> Dispatching <b>{money2(total)}</b> but only <b>{money2(available)}</b> available. Balance will go negative by <b>{money2(total-available)}</b>.</span>
+        </div>
+      )}
+      <button className="dispatch-area" disabled={!selected.length||!allAssigned||!form.dueAt||submitting}>
+        {submitting
+          ?'Dispatching Route...'
           :!allAssigned
           ?'Please select an Agent for all checked ATMs'
           :'Dispatch area route →'}

@@ -444,12 +444,13 @@ function JobUpdate({ job, admin, close, saved }) {
   const [cash,   setCash]   = useState(job.cashToLoad ?? '');
   const [files,  setFiles]  = useState([]);
   const [error,  setError]  = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function send(e) {
     e.preventDefault();
+    if(isSubmitting) return;
+    setIsSubmitting(true);
     setError('');
-    const btn = e.target.querySelector('button[type="submit"]');
-    if(btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
     try {
       const fd = new FormData();
       fd.append('status', status);
@@ -464,7 +465,8 @@ function JobUpdate({ job, admin, close, saved }) {
       saved();
     } catch (err) {
       setError(err.message);
-      if(btn) { btn.disabled = false; btn.textContent = 'Submit update'; }
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -506,7 +508,7 @@ function JobUpdate({ job, admin, close, saved }) {
           <small>Optional. Up to 4 files, 8 MB each.</small>
         </label>
         {error && <p className="error">{error}</p>}
-        <button type="submit">Submit secure update →</button>
+        <button type="submit" disabled={isSubmitting}>{isSubmitting?'Submitting...':'Submit secure update →'}</button>
       </form>
     </div>
   );

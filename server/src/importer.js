@@ -187,6 +187,7 @@ async function importWorkbook(buffer, fileName, userId, io) {
   const format = detectFormat(headers);
   const totals = { imported: data.length, new: 0, updated: 0, removed: 0, unchanged: 0, format };
   const changes = [];
+  const importAlerts = [];
 
   // ── 1. PRE-FETCH ALL EXISTING TERMINALS IN BULK ──────────────────────
   const terminalIdsArray = Array.from(seen);
@@ -301,20 +302,20 @@ async function importWorkbook(buffer, fileName, userId, io) {
         bulkOps.push({ updateOne: { filter: { _id: existing._id }, update: { $set: partialSet } } });
         changes.push({ terminalId, type: 'updated', format, fields: changedFields });
         totals.updated++;
-        
-        if (io && format === 'canada_status' && extracted.cashBalance !== undefined) {
+        // (Alert collection handled outside the loop now)
+        if (format === 'canada_status' && extracted.cashBalance !== undefined) {
           const cashBalance = extracted.cashBalance;
           const wishAmount = existing.official?.wishAmount || existing.alert?.threshold || 0;
           const oldBalance = existing.official?.cashBalance;
           
           if (cashBalance === 0 && oldBalance !== 0) {
-            io.emit('terminal_alert', {
+            importAlerts.push({
               type: 'error',
               title: 'Critical: Zero Balance',
               message: `Terminal ${terminalId} (${existing.official?.name || 'Unknown'}) is out of cash ($0)!`
             });
-          } else if (wishAmount > 0 && cashBalance < wishAmount && oldBalance >= wishAmount) {
-            io.emit('terminal_alert', {
+          } else if (wishAmount > 0 && cashBalance < wishAmount && (oldBalance === undefined || oldBalance >= wishAmount)) {
+            importAlerts.push({
               type: 'warning',
               title: 'Low Cash Warning',
               message: `Terminal ${terminalId} dropped to $${cashBalance} (Wish: $${wishAmount})`
@@ -368,11 +369,24 @@ async function importWorkbook(buffer, fileName, userId, io) {
   const run = await ImportRun.create({ fileName, importedBy: userId, totals, changes });
 
   if (discrepancyCount > 0) {
+    if (io) io.emit('discrepancy_alert', { message: `${discrepancyCount} cash discrepancies detected during import.` });
     const discTerminalIds = changes.filter(c => c.type === 'discrepancy').map(c => c.terminalId);
     await CashDiscrepancy.updateMany(
       { terminalId: { $in: discTerminalIds }, importRunId: null },
       { $set: { importRunId: run._id } }
     );
+  }
+
+  if (io && importAlerts.length > 0) {
+    if (importAlerts.length > 3) {
+      io.emit('terminal_alert', {
+        type: 'warning',
+        title: 'Multiple Cash Alerts',
+        message: `${importAlerts.length} terminals have dropped below their wish amount or reached zero balance.`
+      });
+    } else {
+      importAlerts.forEach(a => io.emit('terminal_alert', a));
+    }
   }
 
   return { runId: run.id, ...totals };

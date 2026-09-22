@@ -60,6 +60,7 @@ export default function AgentManagement(){
 
   async function save(e){
     e.preventDefault();
+    if(saving) return;
     setSaving(true);setMsg('');
     const body=new FormData();
     if(!editing){

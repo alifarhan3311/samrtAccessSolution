@@ -307,7 +307,8 @@ app.post('/api/jobs/dispatch', auth, permit('admin', 'manager', 'dispatch'), asy
       ]);
       const previousBalance = Math.max(0, prevWithdrawn - prevDispatched + prevReturned);
       const available = previousBalance + withdrawn - alreadyDispatched + returned;
-      if (b.cashToLoad > available) return res.status(400).json({ message: `Insufficient cash balance. Available: $${available.toLocaleString()} (Previous: $${previousBalance.toLocaleString()}, Today Withdrawn: $${withdrawn.toLocaleString()}, Already dispatched: $${alreadyDispatched.toLocaleString()}, Returned: $${returned.toLocaleString()})`, available, previousBalance, withdrawn, alreadyDispatched, returned });
+      // Cash balance check removed — dispatch allowed even with negative balance (admin manages cash manually)
+      // if (b.cashToLoad > available) return res.status(400).json({ message: `Insufficient cash balance. Available: $${available.toLocaleString()}`, available });
     }
     const job = await AgentJob.create({ terminal: terminal._id, terminalId: terminal.terminalId, agent: agent._id, assignedBy: req.user._id, businessName: terminal.current?.businessName || terminal.official?.tempName || terminal.original?.businessName, address: terminal.current?.address || terminal.original?.address, city: terminal.current?.city || terminal.original?.city, wishAmount: terminal.official?.wishAmount || terminal.alert?.threshold || 0, cashToLoad: b.cashToLoad, dueAt: new Date(b.dueAt), events: [{ status: 'assigned', note: b.note, createdBy: req.user._id }] }); await audit(req, 'DAILY_AGENT_DISPATCHED', 'AgentJob', job.id, { terminalId: terminal.terminalId, agent: agent.email, cashToLoad: b.cashToLoad, dueAt: b.dueAt }); res.status(201).json(await job.populate('agent', 'name email'));
   } catch (e) { next(e) }

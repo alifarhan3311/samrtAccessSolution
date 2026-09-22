@@ -12,6 +12,7 @@ export default function DailyDispatch({done}){
   const[bal,setBal]=useState(null);
   const[msg,setMsg]=useState('');
   const[f,setF]=useState({agentId:'',cashToLoad:'',dueAt:getTorontoDateString(),note:''});
+  const[submitting,setSubmitting]=useState(false);
 
   const loadAgents=(targetDate=f.dueAt)=>{
     const q=targetDate?`?date=${targetDate}`:'';
@@ -60,18 +61,20 @@ export default function DailyDispatch({done}){
 
   async function dispatch(e){
     e.preventDefault();
+    if(submitting) return;
+    setSubmitting(true);
     try{
       const localDate=getTorontoDateString();
       await req('/jobs/dispatch',{method:'POST',body:JSON.stringify({...f,terminalId:terminal.terminalId,cashToLoad:+f.cashToLoad,localDate})});
       setMsg('Daily job assigned successfully.');
       setTerminal();setF({agentId:'',cashToLoad:'',dueAt:getTorontoDateString(),note:''});
       loadAgents();loadBal();done?.();
-    }catch(e){setMsg(e.message);}
+    }catch(e){setMsg(e.message);}finally{setSubmitting(false);}
   }
 
   const cashToLoad=+f.cashToLoad||0;
   const available=bal?.available??null;
-  const overBudget=available!==null&&cashToLoad>available;
+  const overBudget=available!==null&&cashToLoad>available; // warning only
 
   if(initialLoading) return <LoadingSpinner text="Loading dispatch data..."/>;
 
@@ -151,8 +154,14 @@ export default function DailyDispatch({done}){
         <label>Daily instructions
           <textarea value={f.note} onChange={e=>setF({...f,note:e.target.value})}/>
         </label>
-        <button disabled={overBudget}>
-          {overBudget?`Insufficient balance — need ${money(cashToLoad-available)} more`:'Dispatch daily job →'}
+        {overBudget&&(
+          <div style={{background:'#fff3cd',border:'1px solid #ffc107',borderRadius:8,padding:'10px 14px',marginBottom:8,fontSize:13,color:'#856404',display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:16}}>⚠️</span>
+            <span><b>Balance Warning:</b> Dispatching <b>{money(cashToLoad)}</b> but only <b>{money(available)}</b> available. Balance will go negative by <b>{money(cashToLoad-available)}</b>.</span>
+          </div>
+        )}
+        <button disabled={submitting}>
+          {submitting?'Dispatching...':'Dispatch daily job →'}
         </button>
       </form>
 
