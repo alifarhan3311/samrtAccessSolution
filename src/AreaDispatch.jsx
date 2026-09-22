@@ -152,6 +152,7 @@ export default function AreaDispatch({done}){
       })});
       setMsg(`${result.assigned} ATMs assigned across ${selectedAreas.length} area(s). Total cash: $${result.totalCash.toLocaleString()}. ${result.skippedLocked} locked ATM(s) skipped.`);
       loadTerminalsForAreas(selectedAreas, form.dueAt, true);
+      req(`/cash/available?localDate=${localDate}`).then(setBal).catch(()=>{});
     }catch(e){setMsg(e.message);}finally{setSubmitting(false);}
   }
 
