@@ -342,7 +342,9 @@ app.post('/api/jobs/dispatch-area', auth, permit('admin', 'manager', 'area'), as
         today = new Date(); today.setHours(0, 0, 0, 0);
         tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
       }
-      const dq = { date: { $gte: today, $lt: tomorrow } }; const jq = { createdAt: { $gte: today, $lt: tomorrow } }; const [withdrawn, alreadyDispatched, returned] = await Promise.all([CashWithdrawal.aggregate([{ $match: dq }, { $group: { _id: null, total: { $sum: '$amount' } } }]).then(r => r[0]?.total || 0), AgentJob.aggregate([{ $match: jq }, { $group: { _id: null, total: { $sum: '$cashToLoad' } } }]).then(r => r[0]?.total || 0), CashReturn.aggregate([{ $match: dq }, { $group: { _id: null, total: { $sum: '$amount' } } }]).then(r => r[0]?.total || 0)]); const available = withdrawn - alreadyDispatched + returned; if (totalRequested > available) return res.status(400).json({ message: `Insufficient cash. This route needs $${totalRequested.toLocaleString()} but only $${available.toLocaleString()} available today. (Withdrawn: $${withdrawn.toLocaleString()}, Dispatched: $${alreadyDispatched.toLocaleString()}, Returned: $${returned.toLocaleString()})`, available, withdrawn, alreadyDispatched, returned, totalRequested });
+      const dq = { date: { $gte: today, $lt: tomorrow } }; const jq = { createdAt: { $gte: today, $lt: tomorrow } }; const [withdrawn, alreadyDispatched, returned] = await Promise.all([CashWithdrawal.aggregate([{ $match: dq }, { $group: { _id: null, total: { $sum: '$amount' } } }]).then(r => r[0]?.total || 0), AgentJob.aggregate([{ $match: jq }, { $group: { _id: null, total: { $sum: '$cashToLoad' } } }]).then(r => r[0]?.total || 0), CashReturn.aggregate([{ $match: dq }, { $group: { _id: null, total: { $sum: '$amount' } } }]).then(r => r[0]?.total || 0)]); const available = withdrawn - alreadyDispatched + returned;
+      // Cash balance check removed — dispatch allowed even with negative balance (admin manages cash manually)
+      // if (totalRequested > available) return res.status(400).json({ message: `Insufficient cash...` });
     }
     const batchId = crypto.randomUUID(); const primaryArea = areas.join(', '); const jobs = await AgentJob.insertMany(eligible.map(t => { const defaultLoad = Math.max(0, (t.official?.wishAmount || 0) - (t.official?.cashBalance || 0)); const cashToLoad = b.cashOverrides?.[t.terminalId] ?? defaultLoad; const targetAgentId = b.agentOverrides?.[t.terminalId] || b.agentId; const targetNote = b.noteOverrides?.[t.terminalId] || ''; if (!targetAgentId) throw new Error(`Agent must be assigned for terminal ${t.terminalId}`); return { batchId, locationArea: t.official?.locationArea || primaryArea, terminal: t._id, terminalId: t.terminalId, agent: targetAgentId, assignedBy: req.user._id, businessName: t.current?.businessName || t.official?.tempName || t.original?.businessName, address: t.current?.address || t.original?.address, city: t.current?.city || t.official?.city, wishAmount: t.official?.wishAmount || 0, cashToLoad, dueAt: new Date(b.dueAt), events: [{ status: 'assigned', note: `Area route: ${t.official?.locationArea || primaryArea}${b.note ? ` — ${b.note}` : ''}${targetNote ? ` — ${targetNote}` : ''}`, createdBy: req.user._id }] } })); await audit(req, 'AREA_ROUTE_DISPATCHED', 'AgentJob', batchId, { locationArea: primaryArea, assigned: jobs.length, skippedLocked: locked.length, terminalIds: jobs.map(j => j.terminalId) }); res.status(201).json({ batchId, assigned: jobs.length, skippedLocked: locked.length, totalCash: jobs.reduce((s, j) => s + j.cashToLoad, 0) });
   } catch (e) { next(e) }
@@ -552,6 +554,17 @@ app.get('/api/logs', auth, permit('admin', 'manager', 'logs'), async (req, res, 
       else if (['CASH_WITHDRAWN', 'CASH_RETURNED', 'DISCREPANCY_RESOLVED'].includes(a.action)) cat = 'ledger';
       else if (['OFFICIAL_IMPORT'].includes(a.action)) cat = 'imports';
 
+      let computedNote = meta.note || meta.resolveNote || meta.problem || meta.resolutionNote || '';
+      if (a.action === 'OFFICIAL_IMPORT') {
+        computedNote = `Imported file: ${meta.fileName || 'Data Sync'}. ` +
+          `Processed: ${meta.totals?.processed || 0} rows. ` +
+          (meta.totals?.newTerminals > 0 ? `New ATMs: ${meta.totals.newTerminals}. ` : '') +
+          (meta.totals?.updatedTerminals > 0 ? `Updated ATMs: ${meta.totals.updatedTerminals}. ` : '');
+      } else if (a.action === 'AREA_ROUTE_DISPATCHED') {
+        computedNote = `Assigned ${meta.assigned || 0} ATM(s) across area(s): ${meta.locationArea || 'Unknown'}. ` +
+          (meta.skippedLocked > 0 ? `Skipped ${meta.skippedLocked} locked ATM(s).` : '');
+      }
+
       return {
         _id: String(a._id),
         source: 'audit',
@@ -571,7 +584,7 @@ app.get('/api/logs', auth, permit('admin', 'manager', 'logs'), async (req, res, 
         wishAmount: meta.wishAmount || 0,
         amount: meta.amount || 0,
         dueAt: meta.dueAt || null,
-        note: meta.note || meta.resolveNote || meta.problem || meta.resolutionNote || '',
+        note: computedNote,
         proofFiles: meta.proofFiles || [],
         metadata: meta,
         ip: a.ip || ''
