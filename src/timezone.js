@@ -32,6 +32,15 @@ export function getTorontoDateTime(val) {
   return d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) + 'T' + d.toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour12: false, hour: '2-digit', minute: '2-digit' });
 }
 
+export function getTorontoDateTimeFormatted(val) {
+  if (!val) return '—';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return '—';
+  const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+  const timeStr = d.toLocaleTimeString('en-US', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  return `${dateStr} ${timeStr}`;
+}
+
 export function isOlderThan3Days(val) {
   if (!val) return true; // If no date provided, treat it as outdated (red)
   const d = new Date(val);

@@ -2,7 +2,7 @@ import React,{useEffect,useState}from'react';
 import LoadingSpinner from './LoadingSpinner.jsx';
 import AssignTerminal from './AssignTerminal.jsx';
 import './atm-forms.css';
-import { getTorontoDateString } from './timezone';
+import { getTorontoDateString, getTorontoDateTimeFormatted } from './timezone';
 
 const auth=()=>({Authorization:`Bearer ${localStorage.getItem('token')}`});
 const names={status:'Status',tempName:'Temp Name',name:'Business Name',address:'Address',city:'City',locationArea:'Location Area',wishAmount:'Wish Amount',cashBalance:'Cash Balance',cashLoading:'Cash Loading',agent:'Agent',notesTask:'Notes/Task',lastCommunication:'Last Communication',lastWithdrawalAt:'Last Withdrawal Date'};
@@ -157,7 +157,32 @@ export default function Notifications({go}){
       </div>
       <div className="notice-orb">{data.total}</div>
     </div>
-    {data.latestImport&&<div className="latest-import"><span>Latest upload</span><b>{data.latestImport.fileName}</b><small>{getTorontoDateString(data.latestImport.createdAt)}</small></div>}
+    {(data.statusImport || data.mgmtImport) && (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+        {data.statusImport && (
+          <div className="latest-import" style={{ marginTop: 0 }}>
+            <span style={{ fontWeight: 700, minWidth: '180px', color: '#15803d' }}>
+              📄 Terminal Status File:
+            </span>
+            <b style={{ color: '#183d36' }}>{data.statusImport.fileName}</b>
+            <small style={{ fontWeight: 600, color: '#4b5563', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              📅 {getTorontoDateTimeFormatted(data.statusImport.createdAt)}
+            </small>
+          </div>
+        )}
+        {data.mgmtImport && (
+          <div className="latest-import" style={{ marginTop: 0 }}>
+            <span style={{ fontWeight: 700, minWidth: '180px', color: '#0369a1' }}>
+              📑 Terminal Management File:
+            </span>
+            <b style={{ color: '#183d36' }}>{data.mgmtImport.fileName}</b>
+            <small style={{ fontWeight: 600, color: '#4b5563', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              📅 {getTorontoDateTimeFormatted(data.mgmtImport.createdAt)}
+            </small>
+          </div>
+        )}
+      </div>
+    )}
     
     <div className="notice-tabs">
       <button className={tab==='changes'?'active':''} onClick={()=>{setTab('changes');setSetupFilter('all');setCityFilter('all');}}>Latest changes <b>{data.recentChanges?.length||0}</b></button>

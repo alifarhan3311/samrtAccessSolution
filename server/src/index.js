@@ -122,13 +122,17 @@ app.get('/api/dashboard', auth, async (req, res, next) => {
 });
 app.get('/api/notifications', auth, async (req, res, next) => {
   try {
-    const [setup, lowCash, missing, latestImport, unassignedTickets] = await Promise.all([
+    const [setup, lowCash, missing, statusImport, mgmtImport, unassignedTickets] = await Promise.all([
       Terminal.find({ setupRequired: true }).select('terminalId official.status official.name official.tempName official.address official.city official.locationArea official.wishAmount official.cashBalance official.lastCommunication official.lastWithdrawalAt current setupReason createdAt').sort({ createdAt: -1 }).limit(200),
       Terminal.find({ 'alert.enabled': true, $expr: { $lte: ['$official.cashBalance', '$alert.threshold'] } }).select('terminalId official.name official.address official.city official.cashBalance alert.threshold').sort({ 'official.cashBalance': 1 }).limit(200),
       Terminal.find({ 'official.sourcePresent': false }).select('terminalId official.name official.address official.city official.lastSyncedAt').sort({ 'official.lastSyncedAt': -1 }).limit(100),
-      ImportRun.findOne().sort({ createdAt: -1 }).select('fileName changes totals createdAt').lean(),
+      ImportRun.findOne({ $or: [{ 'totals.format': 'canada_status' }, { fileName: { $not: /terminal\s*management/i } }] }).sort({ createdAt: -1 }).select('fileName changes totals createdAt').lean(),
+      ImportRun.findOne({ $or: [{ 'totals.format': 'terminal_management' }, { fileName: /terminal\s*management/i }] }).sort({ createdAt: -1 }).select('fileName changes totals createdAt').lean(),
       Ticket.find({ $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }], status: { $ne: 'Closed' } }).sort({ createdAt: -1 }).limit(100).populate('generatedBy', 'name email').lean()
     ]);
+    const latestImport = (statusImport && mgmtImport)
+      ? (new Date(statusImport.createdAt) > new Date(mgmtImport.createdAt) ? statusImport : mgmtImport)
+      : (statusImport || mgmtImport || null);
     const recentChanges = (latestImport?.changes || []).slice(0, 50);
     res.json({
       setup,
@@ -136,6 +140,8 @@ app.get('/api/notifications', auth, async (req, res, next) => {
       missing,
       unassignedTickets: unassignedTickets || [],
       recentChanges,
+      statusImport: statusImport ? { _id: statusImport._id, fileName: statusImport.fileName, createdAt: statusImport.createdAt, totals: statusImport.totals } : null,
+      mgmtImport: mgmtImport ? { _id: mgmtImport._id, fileName: mgmtImport.fileName, createdAt: mgmtImport.createdAt, totals: mgmtImport.totals } : null,
       latestImport: latestImport ? { fileName: latestImport.fileName, createdAt: latestImport.createdAt, totals: latestImport.totals } : null,
       total: setup.length + lowCash.length + missing.length + (unassignedTickets?.length || 0)
     });
