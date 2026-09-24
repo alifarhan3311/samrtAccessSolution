@@ -5,7 +5,7 @@ export default function AssignTerminal({ initialTerminalId, initialData, readOnl
   const[id,setId]=useState(initialTerminalId||'');
   const[terminal,setTerminal]=useState();
   const[msg,setMsg]=useState('');
-  const[f,setF]=useState({businessName:'',address:'',city:'',wishAmount:2000,paymentAmount:0,note:''});
+  const[f,setF]=useState({businessName:'',address:'',city:'',locationArea:'',wishAmount:2000,paymentAmount:0,note:''});
 
   async function loadTerminal(terminalId){
     if(!terminalId)return;
@@ -18,6 +18,7 @@ export default function AssignTerminal({ initialTerminalId, initialData, readOnl
         businessName:t.official?.tempName||t.current?.businessName||t.original?.businessName||t.official?.name||'',
         address:t.current?.address||t.official?.address||t.original?.address||'',
         city:t.current?.city||t.official?.city||t.original?.city||'',
+        locationArea:t.official?.locationArea||'',
         wishAmount:t.official?.wishAmount||2000,
         paymentAmount:t.current?.paymentAmount||0,
         note:''
@@ -133,13 +134,22 @@ export default function AssignTerminal({ initialTerminalId, initialData, readOnl
           </span>
           <input required value={f.address} onChange={e=>setF({...f,address:e.target.value})}/>
         </label>
-        <label>
-          <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>City</span>
-            {(!f.city || f.city.toLowerCase().includes('unavailable')) && <span style={{ fontSize: 10, background: '#ffedd5', color: '#c2410c', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>NEEDS SETUP</span>}
-          </span>
-          <input required value={f.city} onChange={e=>setF({...f,city:e.target.value})}/>
-        </label>
+        <div className="two">
+          <label>
+            <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>City</span>
+              {(!f.city || f.city.toLowerCase().includes('unavailable')) && <span style={{ fontSize: 10, background: '#ffedd5', color: '#c2410c', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>NEEDS SETUP</span>}
+            </span>
+            <input required value={f.city} onChange={e=>setF({...f,city:e.target.value})}/>
+          </label>
+          <label>
+            <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Location Area</span>
+              {!f.locationArea && <span style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>NEEDS SETUP</span>}
+            </span>
+            <input value={f.locationArea} onChange={e=>setF({...f,locationArea:e.target.value})} placeholder="e.g. DOWNTOWN / WEST"/>
+          </label>
+        </div>
         <div className="two">
           <label>
             <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

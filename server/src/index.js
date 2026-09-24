@@ -146,7 +146,7 @@ app.get('/api/terminals/:id', auth, async (req, res, next) => { try { const item
 app.patch('/api/terminals/:id/status', auth, permit('admin', 'manager', 'terminals'), async (req, res, next) => { try { const { status } = z.object({ status: z.enum(['Active', 'Inactive', 'Spare', 'Pending']) }).parse(req.body); const t = await Terminal.findOneAndUpdate({ terminalId: req.params.id.toUpperCase() }, { $set: { 'official.status': status } }, { new: true }); if (!t) return res.status(404).json({ message: 'Terminal not found' }); await audit(req, 'TERMINAL_STATUS_CHANGED', 'Terminal', t.id, { terminalId: t.terminalId, status }); res.json(t); } catch (e) { next(e) } });
 app.post('/api/terminals/:id/assign', auth, permit('admin', 'manager', 'assign'), async (req, res, next) => {
   try {
-    const b = z.object({ businessName: z.string().min(2).max(150), address: z.string().min(3).max(250), city: z.string().min(2).max(100), wishAmount: z.number().nonnegative(), paymentAmount: z.number().nonnegative().optional(), note: z.string().max(1000).optional(), agentId: z.string().optional(), cashToLoad: z.number().nonnegative().optional(), dueAt: z.string().optional() }).parse(req.body);
+    const b = z.object({ businessName: z.string().min(2).max(150), address: z.string().min(3).max(250), city: z.string().min(2).max(100), locationArea: z.string().max(100).optional(), wishAmount: z.number().nonnegative(), paymentAmount: z.number().nonnegative().optional(), note: z.string().max(1000).optional(), agentId: z.string().optional(), cashToLoad: z.number().nonnegative().optional(), dueAt: z.string().optional() }).parse(req.body);
     const t = await Terminal.findOne({ terminalId: req.params.id.toUpperCase() });
     if (!t) return res.status(404).json({ message: 'Terminal not found' });
     let agent;
@@ -178,6 +178,9 @@ app.post('/api/terminals/:id/assign', auth, permit('admin', 'manager', 'assign')
     t.assignmentHistory.push({ businessName: b.businessName, address: b.address, city: b.city, paymentAmount: b.paymentAmount ?? b.wishAmount, note: b.note, assignedAt: now, assignedBy: req.user._id });
     t.official.tempName = b.businessName;
     t.official.wishAmount = b.wishAmount;
+    if (b.locationArea !== undefined) {
+      t.official.locationArea = b.locationArea;
+    }
     t.current = { businessName: b.businessName, address: b.address, city: b.city, paymentAmount: b.paymentAmount ?? b.wishAmount, assignedAt: now };
     t.alert = { enabled: true, threshold: b.wishAmount };
     t.setupRequired = false;
@@ -191,7 +194,7 @@ app.post('/api/terminals/:id/assign', auth, permit('admin', 'manager', 'assign')
 });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: (req, file, cb) => cb(null, /\.(xlsx|xls)$/i.test(file.originalname)) });
 const proofUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 4 }, fileFilter: (req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype)) });
-app.post('/api/imports', auth, permit('admin', 'import'), upload.single('file'), async (req, res, next) => { try { if (!req.file) return res.status(400).json({ message: 'Excel file required' }); const result = await importWorkbook(req.file.buffer, req.file.originalname, req.user._id, req.app.locals.io); await audit(req, 'OFFICIAL_IMPORT', 'ImportRun', result.runId, result); res.status(201).json(result); } catch (e) { next(e) } });
+app.post('/api/imports', auth, permit('admin', 'import'), upload.single('file'), async (req, res, next) => { try { if (!req.file) return res.status(400).json({ message: 'Excel file required' }); const result = await importWorkbook(req.file.buffer, req.file.originalname, req.user._id, req.app.locals.io); await audit(req, 'OFFICIAL_IMPORT', 'ImportRun', result.runId, { ...result, fileName: req.file.originalname }); res.status(201).json(result); } catch (e) { next(e) } });
 app.get('/api/jobs', auth, async (req, res, next) => { try { const page = Math.max(1, +req.query.page || 1), limit = Math.min(100, Math.max(1, +req.query.limit || 25)); const q = req.user.role === 'agent' ? { agent: req.user._id } : {}; if (req.user.role !== 'agent' && req.query.agentId) q.agent = req.query.agentId; if (req.query.status) q.status = req.query.status; if (req.query.fromDate || req.query.toDate) { q.dueAt = {}; if (req.query.fromDate) q.dueAt.$gte = new Date(req.query.fromDate + 'T00:00:00.000Z'); if (req.query.toDate) { const to = new Date(req.query.toDate + 'T00:00:00.000Z'); to.setUTCDate(to.getUTCDate() + 1); q.dueAt.$lt = to; } } if (req.query.search) { const rx = new RegExp(String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); q.$or = [{ terminalId: rx }, { businessName: rx }, { city: rx }]; } const [items, total] = await Promise.all([AgentJob.find(q).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).populate('agent', 'name email').populate('assignedBy', 'name email').populate('events.createdBy', 'name email'), AgentJob.countDocuments(q)]); res.json({ items, total, page, pages: Math.ceil(total / limit) }); } catch (e) { next(e) } });
 app.get('/api/jobs/active-terminal/:terminalId', auth, async (req, res, next) => {
   try {
