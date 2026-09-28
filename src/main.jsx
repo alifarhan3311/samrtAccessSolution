@@ -572,8 +572,10 @@ function Terminals() {
             {data.items.map(t => (
               <tr key={t.terminalId}>
                 <td>
-                  <select className={'status-select ' + (t.official?.status?.toLowerCase())} value={t.official?.status === 'Inactive' ? 'Inactive' : 'Active'} onChange={e => changeStatus(t, e.target.value)}>
-                    <option>Active</option><option>Inactive</option>
+                  <select className={'status-select ' + (t.official?.status?.toLowerCase())} value={['Active', 'Inactive', 'Never Communicated'].includes(t.official?.status) ? t.official?.status : 'Active'} onChange={e => changeStatus(t, e.target.value)}>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="Never Communicated">Never Communicated</option>
                   </select>
                 </td>
                 <td><b>{t.terminalId}</b></td>

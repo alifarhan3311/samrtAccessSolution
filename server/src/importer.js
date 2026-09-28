@@ -135,14 +135,43 @@ function extractCanadaStatus(row, headers) {
  * Returns only the fields this file provides — Cash Balance etc. are left untouched.
  */
 function extractTerminalManagement(row, headers) {
+  const rawTrans = pick(row, headers, [/last\s*trans\s*time/i]);
+  let commStr = '';
+  if (rawTrans instanceof Date && !isNaN(rawTrans.getTime())) {
+    const mm = String(rawTrans.getMonth() + 1).padStart(2, '0');
+    const dd = String(rawTrans.getDate()).padStart(2, '0');
+    const yy = String(rawTrans.getFullYear()).slice(-2);
+    const hh = String(rawTrans.getHours()).padStart(2, '0');
+    const min = String(rawTrans.getMinutes()).padStart(2, '0');
+    commStr = `${mm}/${dd}/${yy} ${hh}:${min}`;
+  } else {
+    commStr = clean(rawTrans);
+  }
+
+  const rawSettled = pick(row, headers, [/last\s*settled/i]);
+  let settledDate = undefined;
+  let settledStr = clean(rawSettled);
+  if (rawSettled instanceof Date && !isNaN(rawSettled.getTime())) {
+    settledDate = rawSettled;
+    settledStr = rawSettled.toISOString().slice(0, 10);
+  } else if (settledStr && !/^(n\/?a|none|nil)$/i.test(settledStr)) {
+    const d = new Date(settledStr);
+    if (!isNaN(d.getTime())) {
+      settledDate = d;
+    }
+  }
+
   return {
     name:               clean(pick(row, headers, [/location\s*name/i, /^name$/i])),
     address:            clean(pick(row, headers, [/address/i])),
     lastTransData:      clean(pick(row, headers, [/last\s*trans\s*dat/i])),
     lastTransTime:      date(pick(row, headers, [/last\s*trans\s*time/i])),
+    lastCommunication:  commStr,
     totalCassetteValue: num(pick(row, headers, [/total\s*cassette\s*value/i])),
     totalCassetteCount: num(pick(row, headers, [/total\s*cassette\s*count/i])),
     lastSettledTime:    date(pick(row, headers, [/last\s*settled/i])),
+    lastWithdrawalAt:   settledDate,
+    lastWithdrawalDate: settledStr,
     withdrawalCount:    num(pick(row, headers, [/withdrawal\s*count/i])),
     dispensedAmount:    num(pick(row, headers, [/dispensed\s*amount/i])),
     terminalModel:      clean(pick(row, headers, [/^model$/i])),

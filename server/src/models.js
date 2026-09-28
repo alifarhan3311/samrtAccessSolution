@@ -22,7 +22,7 @@ const terminalSchema = new mongoose.Schema({
     lastTransData: String, lastTransTime: Date,
     totalCassetteValue: Number, totalCassetteCount: Number,
     lastSettledTime: Date, withdrawalCount: Number,
-    dispensedAmount: Number, terminalModel: String,
+    dispensedAmount: Number, terminalModel: String, serialNumber: String, merchantCommission: String,
     raw: mongoose.Schema.Types.Mixed, lastSyncedAt: Date
   },
   original: { businessName: String, address: String, city: String },

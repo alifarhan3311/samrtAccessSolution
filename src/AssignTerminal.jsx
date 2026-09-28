@@ -6,7 +6,7 @@ export default function AssignTerminal({ initialTerminalId, initialData, readOnl
   const[terminal,setTerminal]=useState();
   const[msg,setMsg]=useState('');
   const[f,setF]=useState({businessName:'',address:'',city:'',locationArea:'',wishAmount:2000,paymentAmount:0,note:''});
-
+  const[metaOptions,setMetaOptions]=useState({cities:[],areas:[]});
   async function loadTerminal(terminalId){
     if(!terminalId)return;
     try{
@@ -28,6 +28,18 @@ export default function AssignTerminal({ initialTerminalId, initialData, readOnl
   }
 
   useEffect(()=>{
+    req('/location-areas').then(data => {
+      if(Array.isArray(data)){
+        const areaSet = new Set();
+        const citySet = new Set();
+        data.forEach(a => {
+          if(a.name && a.name !== 'Never Communicated' && a.name !== 'Inactive') areaSet.add(a.name);
+          (a.cities || []).forEach(c => citySet.add(c));
+        });
+        setMetaOptions({ areas: Array.from(areaSet).sort(), cities: Array.from(citySet).sort() });
+      }
+    }).catch(console.error);
+
     if(initialTerminalId){
       loadTerminal(initialTerminalId);
     }else{
@@ -140,14 +152,22 @@ export default function AssignTerminal({ initialTerminalId, initialData, readOnl
               <span>City</span>
               {(!f.city || f.city.toLowerCase().includes('unavailable')) && <span style={{ fontSize: 10, background: '#ffedd5', color: '#c2410c', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>NEEDS SETUP</span>}
             </span>
-            <input required value={f.city} onChange={e=>setF({...f,city:e.target.value})}/>
+            <select required value={f.city} onChange={e=>setF({...f,city:e.target.value})}>
+              <option value="">-- Select City --</option>
+              {f.city && !metaOptions.cities.includes(f.city) && <option value={f.city}>{f.city} (Current)</option>}
+              {metaOptions.cities.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </label>
           <label>
             <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Location Area</span>
               {!f.locationArea && <span style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>NEEDS SETUP</span>}
             </span>
-            <input value={f.locationArea} onChange={e=>setF({...f,locationArea:e.target.value})} placeholder="e.g. DOWNTOWN / WEST"/>
+            <select value={f.locationArea} onChange={e=>setF({...f,locationArea:e.target.value})}>
+              <option value="">-- Select Area --</option>
+              {f.locationArea && !metaOptions.areas.includes(f.locationArea) && <option value={f.locationArea}>{f.locationArea} (Current)</option>}
+              {metaOptions.areas.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
           </label>
         </div>
         <div className="two">

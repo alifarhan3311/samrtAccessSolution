@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { toast } from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 import LoadingSpinner from './LoadingSpinner.jsx';
 import './terminal.css';
 
@@ -41,6 +43,7 @@ export default function TerminalRegistry() {
   const [data,     setData]     = useState({ items: [], total: 0 });
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(true);
+  const [exporting, setExporting]= useState(false);
   const [selected, setSelected] = useState(null); // mobile detail modal
 
   const load = () => {
@@ -232,6 +235,46 @@ export default function TerminalRegistry() {
     setPage(1);
   }
 
+  async function exportAll() {
+    setExporting(true);
+    try {
+      const allItems = filteredItems;
+      if (allItems.length === 0) {
+        toast.error("No terminals to export");
+        setExporting(false);
+        return;
+      }
+      
+      const rows = allItems.map(t => ({
+        "Status": t.official?.status || 'Active',
+        "Terminal ID": t.terminalId,
+        "Temp Name": t.official?.tempName || '',
+        "Name": t.original?.businessName || t.official?.name || '',
+        "Address": t.current?.address || t.original?.address || t.official?.address || '',
+        "City": t.current?.city || t.original?.city || t.official?.city || '',
+        "Location Area": t.official?.locationArea || '',
+        "Wish Amount": Number(t.official?.wishAmount) || 0,
+        "Cash Balance": Number(t.official?.cashBalance) || 0,
+        "Cashloading": t.official?.cashLoading || '',
+        "Agent": t.official?.agent || '',
+        "Notes/Task": t.official?.notesTask || '',
+        "Last Communication": t.official?.lastCommunication || '',
+        "Last Withdrawal Date": t.official?.lastWithdrawalAt ? getTorontoDateString(t.official.lastWithdrawalAt) : '',
+        "Notes": t.official?.notes || ''
+      }));
+
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, "Terminals");
+      XLSX.writeFile(book, `Terminal-Registry-${getTorontoDateString()}.xlsx`);
+      toast.success(`Exported ${allItems.length} terminals`);
+    } catch (err) {
+      toast.error(err.message || "Failed to export terminals");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const isFiltered = search || statusFilter !== 'all' || areaFilter !== 'all' || cityFilter !== 'all';
 
   // Table header component for sorting
@@ -263,8 +306,6 @@ export default function TerminalRegistry() {
             ['all',      'All Records', counts.total],
             ['Active',   'Active',      counts.active],
             ['Inactive', 'Inactive',    counts.inactive],
-            ['Spare',    'Spare',       counts.spare],
-            ['Pending',  'Pending',     counts.pending],
             ['NeverCommunicated', 'Never Comm.', counts.neverComm],
           ].map(([st, lbl, cnt]) => (
             <button
@@ -338,6 +379,17 @@ export default function TerminalRegistry() {
                 ✕ Reset Filters
               </button>
             )}
+
+            <button
+              type="button"
+              className="tr-clear-btn"
+              onClick={exportAll}
+              disabled={exporting}
+              style={{ background: '#183d36', color: '#fff', borderColor: '#183d36', opacity: exporting ? 0.7 : 1 }}
+              title="Download filtered terminals as Excel"
+            >
+              {exporting ? 'Exporting...' : '↓ Download All'}
+            </button>
           </div>
         </div>
       </div>
@@ -389,14 +441,13 @@ export default function TerminalRegistry() {
                         <td>
                           <select
                             className={`status-select ${t.official?.status?.toLowerCase()}`}
-                            value={['Active', 'Inactive', 'Spare', 'Pending'].includes(t.official?.status) ? t.official?.status : 'Active'}
+                            value={['Active', 'Inactive', 'Never Communicated'].includes(t.official?.status) ? t.official?.status : 'Active'}
                             onChange={e => updateStatus(t, e.target.value)}
                             disabled={isAgent}
                           >
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
-                            <option value="Spare">Spare</option>
-                            <option value="Pending">Pending</option>
+                            <option value="Never Communicated">Never Communicated</option>
                           </select>
                         </td>
                         <td><b>{t.terminalId}</b></td>
@@ -555,6 +606,13 @@ export default function TerminalRegistry() {
           t={selected}
           onClose={() => setSelected(null)}
           onStatusChange={updateStatus}
+          onSave={updated => {
+            setData(prev => ({
+              ...prev,
+              items: prev.items.map(item => item.terminalId === updated.terminalId ? updated : item)
+            }));
+            setSelected(updated);
+          }}
           isAgent={isAgent}
         />
       )}
@@ -563,68 +621,151 @@ export default function TerminalRegistry() {
 }
 
 /* ── Terminal Detail Modal ────────────────────────────────────────────────── */
-function TerminalModal({ t, onClose, onStatusChange, isAgent }) {
-  const currentBiz     = t.official?.tempName || t.current?.businessName || t.official?.name;
+function TerminalModal({ t, onClose, onStatusChange, isAgent, onSave }) {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [formData, setFormData] = React.useState({});
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    setFormData({
+      locationArea: t.official?.locationArea || '',
+      name: t.official?.name || '',
+      wishAmount: t.official?.wishAmount || '',
+      cashBalance: t.official?.cashBalance || '',
+      cashLoading: t.official?.cashLoading || '',
+      agent: t.official?.agent || '',
+      notesTask: t.official?.notesTask || '',
+      notes: t.official?.notes || '',
+      terminalModel: t.official?.terminalModel || '',
+      serialNumber: t.official?.serialNumber || '',
+      merchantCommission: t.official?.merchantCommission || ''
+    });
+  }, [t]);
+
+  const handleChange = (e) => {
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/terminals/${t.terminalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify(formData)
+      });
+      if (!res.ok) throw new Error((await res.json()).message || 'Failed to update');
+      const updated = await res.json();
+      if (onSave) onSave(updated);
+      setIsEditing(false);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const currentBiz     = t.official?.tempName || t.official?.name;
   const currentAddress = t.current?.address      || t.original?.address  || t.official?.address;
   const currentCity    = t.current?.city         || t.original?.city     || t.official?.city;
-  const isActive       = t.official?.status === 'Active';
+
+  const editableFields = [
+    { key: 'locationArea', label: 'Location Area' },
+    { key: 'name', label: 'Name' },
+    { key: 'wishAmount', label: 'Wish Amount', type: 'number' },
+    { key: 'cashBalance', label: 'Cash Balance', type: 'number' },
+    { key: 'cashLoading', label: 'Cash Loading', type: 'number' },
+    { key: 'agent', label: 'Agent' },
+    { key: 'notesTask', label: 'Notes / Task' },
+    { key: 'notes', label: 'Notes' },
+    { key: 'terminalModel', label: 'Model' },
+    { key: 'serialNumber', label: 'Machine Serial No' },
+    { key: 'merchantCommission', label: 'Merchant Comm.' },
+  ];
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="tr-modal" onClick={e => e.stopPropagation()}>
+      <div className="tr-modal" onClick={e => e.stopPropagation()} style={{ width: '500px', maxWidth: '95%' }}>
         <button className="close" onClick={onClose}>×</button>
 
         {/* Header */}
-        <div className="tr-modal-header">
-          <span className={`tr-card-badge tr-badge-${(t.official?.status || 'active').toLowerCase()}`}>
-            {t.official?.status || 'Active'}
-          </span>
-          <h2>{t.terminalId}</h2>
-          <p className="tr-modal-biz">{show(currentBiz)}</p>
+        <div className="tr-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <span className={`tr-card-badge tr-badge-${(t.official?.status || 'active').toLowerCase()}`}>
+              {t.official?.status || 'Active'}
+            </span>
+            <h2 style={{ marginTop: '8px' }}>{t.terminalId}</h2>
+            <p className="tr-modal-biz">{show(currentBiz)}</p>
+          </div>
+          {!isAgent && !isEditing && (
+            <button onClick={() => setIsEditing(true)} style={{ padding: '6px 12px', background: '#f0f0f0', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '32px' }}>Edit</button>
+          )}
+          {!isAgent && isEditing && (
+            <div style={{ display: 'flex', gap: '8px', marginRight: '32px' }}>
+              <button onClick={() => setIsEditing(false)} style={{ padding: '6px 12px', background: '#f0f0f0', border: 'none', borderRadius: '4px', cursor: 'pointer' }} disabled={saving}>Cancel</button>
+              <button onClick={handleSave} style={{ padding: '6px 12px', background: '#2a5aaa', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+            </div>
+          )}
         </div>
 
         {/* Details */}
-        <div className="tr-modal-body">
+        <div className="tr-modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: '10px' }}>
           <div className="tr-modal-section">
             <h5>Current Location</h5>
             <p>{show(currentBiz)}</p>
             <p className="muted">{show(currentAddress)}</p>
             <p className="muted">{show(currentCity)}</p>
           </div>
+          
+          <div className="tr-modal-section" style={{ marginTop: '16px' }}>
+            <h5>Previous Location</h5>
+            <p>{show(t.original?.businessName)}</p>
+            <p className="muted">{show(t.original?.address)}</p>
+            <p className="muted">{show(t.original?.city)}</p>
+          </div>
 
           <div className="tr-modal-rows">
-            {[
-              ['Location Area',       show(t.official?.locationArea)],
-              ['Temp Name',           show(t.official?.tempName)],
-              ['Wish Amount',         money(t.official?.wishAmount)],
-              ['Cash Balance',        money(t.official?.cashBalance)],
-              ['Cash Loading',        show(t.official?.cashLoading)],
-              ['Agent',               show(t.official?.agent)],
-              ['Notes / Task',        show(t.official?.notesTask)],
-              ['Last Communication',  show(t.official?.lastCommunication)],
-              ['Last Withdrawal',     show(t.official?.lastWithdrawalDate || fmt(t.official?.lastWithdrawalAt))],
-              ['Notes',               show(t.official?.notes)],
-            ].map(([label, value]) => (
-              <div key={label} className="tr-modal-row">
-                <small>{label}</small>
-                <span>{value}</span>
+            {editableFields.map(field => (
+              <div key={field.key} className="tr-modal-row" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
+                <small style={{ marginBottom: '4px', color: '#666' }}>{field.label.toUpperCase()}</small>
+                {isEditing ? (
+                  <input
+                    type={field.type || 'text'}
+                    name={field.key}
+                    value={formData[field.key] || ''}
+                    onChange={handleChange}
+                    style={{ width: '100%', padding: '6px', border: '1px solid #ccc', borderRadius: '4px' }}
+                  />
+                ) : (
+                  <span style={{ fontWeight: 500 }}>
+                    {field.type === 'number' && t.official?.[field.key] !== undefined ? money(t.official[field.key]) : show(t.official?.[field.key])}
+                  </span>
+                )}
               </div>
             ))}
+            <div className="tr-modal-row" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
+              <small style={{ marginBottom: '4px', color: '#666' }}>LAST COMMUNICATION</small>
+              <span style={{ fontWeight: 500 }}>{show(t.official?.lastCommunication)}</span>
+            </div>
+            <div className="tr-modal-row" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
+              <small style={{ marginBottom: '4px', color: '#666' }}>LAST WITHDRAWAL</small>
+              <span style={{ fontWeight: 500 }}>{show(t.official?.lastWithdrawalDate || fmt(t.official?.lastWithdrawalAt))}</span>
+            </div>
           </div>
 
           {/* Status toggle */}
-          <div className="tr-modal-status">
+          <div className="tr-modal-status" style={{ marginTop: '20px' }}>
             <small>CHANGE STATUS</small>
             <select
               className={`status-select ${t.official?.status?.toLowerCase()}`}
-              value={['Active', 'Inactive', 'Spare', 'Pending'].includes(t.official?.status) ? t.official?.status : 'Active'}
+              value={['Active', 'Inactive', 'Never Communicated'].includes(t.official?.status) ? t.official?.status : 'Active'}
               onChange={e => onStatusChange(t, e.target.value)}
               disabled={isAgent}
+              style={{ width: '100%', padding: '8px', marginTop: '8px' }}
             >
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
-              <option value="Spare">Spare</option>
-              <option value="Pending">Pending</option>
+              <option value="Never Communicated">Never Communicated</option>
             </select>
           </div>
         </div>

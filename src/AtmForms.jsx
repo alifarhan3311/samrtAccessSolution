@@ -30,7 +30,7 @@ export default function AtmForms() {
   const [uploadForm, setUploadForm] = useState({
     terminalId: '',
     formType: 'installation',
-    date: () => getTorontoDateTime(),
+    date: getTorontoDateTime().substring(0, 10),
     locationName: '',
     remarks: ''
   });
@@ -246,7 +246,10 @@ export default function AtmForms() {
             🚫 ATM Removal Form
           </button>
           <button className="atm-action-btn" onClick={() => setActiveModal('setup')}>
-            📍 ATM Setup & Location Form
+            📍 ATM Swap Form
+          </button>
+          <button className="atm-action-btn" onClick={() => setActiveModal('reprogram')}>
+            ⚙️ ATM Reprogram Form
           </button>
         </div>
       </div>
@@ -285,14 +288,15 @@ export default function AtmForms() {
                 <option value="installation">ATM Installation Form</option>
                 <option value="agreement">ATM Agreement Form</option>
                 <option value="removal">ATM Removal Form</option>
-                <option value="setup">ATM Setup & Location Form</option>
+                <option value="setup">ATM Swap Form</option>
+                <option value="reprogram">ATM Reprogram Form</option>
               </select>
             </div>
 
             <div className="atm-form-group">
-              <label>Form Execution Date & Time *</label>
+              <label>Form Execution Date *</label>
               <input 
-                type="datetime-local" 
+                type="date" 
                 value={uploadForm.date}
                 onChange={e => setUploadForm({ ...uploadForm, date: e.target.value })}
                 required

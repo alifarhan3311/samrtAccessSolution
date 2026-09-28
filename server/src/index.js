@@ -149,7 +149,28 @@ app.get('/api/notifications', auth, async (req, res, next) => {
 });
 app.get('/api/terminals', auth, async (req, res, next) => { try { const page = Math.max(1, +req.query.page || 1), limit = Math.min(500, Math.max(1, +req.query.limit || 25)); const q = {}; if (req.query.search) { const s = String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); q.$or = [{ terminalId: new RegExp(s, 'i') }, { 'current.businessName': new RegExp(s, 'i') }, { 'current.city': new RegExp(s, 'i') }, { 'current.address': new RegExp(s, 'i') }]; } if (req.query.status) q['official.status'] = req.query.status; if (req.query.city) q['current.city'] = new RegExp(`^${String(req.query.city).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'); const [items, total] = await Promise.all([Terminal.find(q).sort({ terminalId: 1 }).skip((page - 1) * limit).limit(limit), Terminal.countDocuments(q)]); res.json({ items, total, page, pages: Math.ceil(total / limit) }); } catch (e) { next(e) } });
 app.get('/api/terminals/:id', auth, async (req, res, next) => { try { const item = await Terminal.findOne({ terminalId: req.params.id.toUpperCase() }).populate('assignmentHistory.assignedBy', 'name email'); if (!item) return res.status(404).json({ message: 'Terminal not found' }); res.json(item); } catch (e) { next(e) } });
-app.patch('/api/terminals/:id/status', auth, permit('admin', 'manager', 'terminals'), async (req, res, next) => { try { const { status } = z.object({ status: z.enum(['Active', 'Inactive', 'Spare', 'Pending']) }).parse(req.body); const t = await Terminal.findOneAndUpdate({ terminalId: req.params.id.toUpperCase() }, { $set: { 'official.status': status } }, { new: true }); if (!t) return res.status(404).json({ message: 'Terminal not found' }); await audit(req, 'TERMINAL_STATUS_CHANGED', 'Terminal', t.id, { terminalId: t.terminalId, status }); res.json(t); } catch (e) { next(e) } });
+app.patch('/api/terminals/:id', auth, permit('admin', 'manager', 'terminals'), async (req, res, next) => {
+  try {
+    const t = await Terminal.findOne({ terminalId: req.params.id.toUpperCase() });
+    if (!t) return res.status(404).json({ message: 'Terminal not found' });
+    const b = req.body;
+    if (!t.official) t.official = {};
+    const allowedFields = ['locationArea', 'tempName', 'name', 'wishAmount', 'cashBalance', 'cashLoading', 'agent', 'notesTask', 'notes', 'terminalModel', 'serialNumber', 'merchantCommission'];
+    for (const f of allowedFields) {
+      if (b[f] !== undefined) {
+        if (f === 'wishAmount' || f === 'cashBalance' || f === 'cashLoading') {
+          t.official[f] = Number(b[f]) || 0;
+        } else {
+          t.official[f] = String(b[f] || '');
+        }
+      }
+    }
+    await t.save();
+    await audit(req, 'TERMINAL_UPDATED', 'Terminal', t.id, { terminalId: t.terminalId, updates: b });
+    res.json(t);
+  } catch (e) { next(e) }
+});
+app.patch('/api/terminals/:id/status', auth, permit('admin', 'manager', 'terminals'), async (req, res, next) => { try { const { status } = z.object({ status: z.enum(['Active', 'Inactive', 'Spare', 'Pending', 'Never Communicated']) }).parse(req.body); const t = await Terminal.findOneAndUpdate({ terminalId: req.params.id.toUpperCase() }, { $set: { 'official.status': status } }, { new: true }); if (!t) return res.status(404).json({ message: 'Terminal not found' }); await audit(req, 'TERMINAL_STATUS_CHANGED', 'Terminal', t.id, { terminalId: t.terminalId, status }); res.json(t); } catch (e) { next(e) } });
 app.post('/api/terminals/:id/assign', auth, permit('admin', 'manager', 'assign'), async (req, res, next) => {
   try {
     const b = z.object({ businessName: z.string().min(2).max(150), address: z.string().min(3).max(250), city: z.string().min(2).max(100), locationArea: z.string().max(100).optional(), wishAmount: z.number().nonnegative(), paymentAmount: z.number().nonnegative().optional(), note: z.string().max(1000).optional(), agentId: z.string().optional(), cashToLoad: z.number().nonnegative().optional(), dueAt: z.string().optional() }).parse(req.body);
