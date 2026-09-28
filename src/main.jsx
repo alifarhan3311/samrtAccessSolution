@@ -8,6 +8,7 @@ import TerminalRegistry from './TerminalRegistry.jsx';
 import AssignmentHistory from './AssignmentHistory.jsx';
 import AssignTerminal from './AssignTerminal.jsx';
 import DailyDispatch from './DailyDispatch.jsx';
+import * as XLSX from 'xlsx';
 import AreaDispatch from './AreaDispatch.jsx';
 import AgentJobs from './AgentJobs.jsx';
 import RouteSheet from './RouteSheet.jsx';
@@ -482,7 +483,121 @@ function Dashboard({go}){
 
 function Stat({label,value,note,accent,warn}){return <article className={'stat '+(accent?'accent ':'')+( warn?'warn':'')}><p>{label}</p><strong>{value}</strong><small>{note}</small></article>;}
 
-function Terminals(){const[q,setQ]=useState(''),[data,setData]=useState({items:[]}),[selected,setSelected]=useState(null),[error,setError]=useState('');const load=()=>request('/terminals?limit=100&search='+encodeURIComponent(q)).then(setData).catch(e=>setError(e.message));useEffect(()=>{const t=setTimeout(load,250);return()=>clearTimeout(t)},[q]);async function changeStatus(t,status){const old=t.official.status;setData(d=>({...d,items:d.items.map(x=>x.terminalId===t.terminalId?{...x,official:{...x.official,status}}:x)}));try{await request('/terminals/'+t.terminalId+'/status',{method:'PATCH',body:JSON.stringify({status})})}catch(e){setError(e.message);setData(d=>({...d,items:d.items.map(x=>x.terminalId===t.terminalId?{...x,official:{...x.official,status:old}}:x)}))}}const show=v=>v===0?0:v||'—',date=v=>v?getTorontoDateString(v):'—';return <><div className="toolbar"><input placeholder="Search terminal, business, city or address..." value={q} onChange={e=>setQ(e.target.value)}/><span>{data.total||0} terminals</span></div>{error&&<p className="error">{error}</p>}<div className="table-wrap full-table"><table><thead><tr><th>Status</th><th>Terminal ID</th><th>Temp Name</th><th>Name</th><th>Address</th><th>City</th><th>Location Area</th><th>Wish Amount</th><th>Cash Balance</th><th>Cashloading</th><th>Agent</th><th>Notes/Task</th><th>Last Communication</th><th>Last Withdrawal Date</th><th></th></tr></thead><tbody>{data.items.map(t=><tr key={t.terminalId}><td><select className={'status-select '+(t.official?.status?.toLowerCase())} value={t.official?.status==='Inactive'?'Inactive':'Active'} onChange={e=>changeStatus(t,e.target.value)}><option>Active</option><option>Inactive</option></select></td><td><b>{t.terminalId}</b></td><td>{show(t.official?.tempName)}</td><td>{show(t.official?.name)}</td><td className="wide-cell">{show(t.official?.address)}</td><td>{show(t.official?.city)}</td><td>{show(t.official?.locationArea)}</td><td>{money(t.official?.wishAmount)}</td><td>{money(t.official?.cashBalance)}</td><td>{show(t.official?.cashLoading)}</td><td>{show(t.official?.agent)}</td><td className="wide-cell">{show(t.official?.notesTask)}</td><td>{show(t.official?.lastCommunication)}</td><td>{date(t.official?.lastWithdrawalAt)}</td><td><button className="link" onClick={()=>setSelected(t)}>View &#8594;</button></td></tr>)}</tbody></table></div>{selected&&<Drawer t={selected} close={()=>setSelected(null)}/>}</>;
+function Terminals() {
+  const [q, setQ] = useState('');
+  const [data, setData] = useState({ items: [] });
+  const [selected, setSelected] = useState(null);
+  const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  const load = () => request('/terminals?limit=100&search=' + encodeURIComponent(q)).then(setData).catch(e => setError(e.message));
+  
+  useEffect(() => {
+    const t = setTimeout(load, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  async function changeStatus(t, status) {
+    const old = t.official.status;
+    setData(d => ({ ...d, items: d.items.map(x => x.terminalId === t.terminalId ? { ...x, official: { ...x.official, status } } : x) }));
+    try {
+      await request('/terminals/' + t.terminalId + '/status', { method: 'PATCH', body: JSON.stringify({ status }) });
+    } catch (e) {
+      setError(e.message);
+      setData(d => ({ ...d, items: d.items.map(x => x.terminalId === t.terminalId ? { ...x, official: { ...x.official, status: old } } : x) }));
+    }
+  }
+
+  async function exportAll() {
+    setExporting(true);
+    try {
+      const res = await request('/terminals?limit=99999');
+      const allItems = res.items || [];
+      if (allItems.length === 0) {
+        toast.error("No terminals to export");
+        setExporting(false);
+        return;
+      }
+      
+      const rows = allItems.map(t => ({
+        "Status": t.official?.status || 'Active',
+        "Terminal ID": t.terminalId,
+        "Temp Name": t.official?.tempName || '',
+        "Name": t.official?.name || '',
+        "Address": t.official?.address || '',
+        "City": t.official?.city || '',
+        "Location Area": t.official?.locationArea || '',
+        "Wish Amount": t.official?.wishAmount || 0,
+        "Cash Balance": t.official?.cashBalance || 0,
+        "Cashloading": t.official?.cashLoading || '',
+        "Agent": t.official?.agent || '',
+        "Notes/Task": t.official?.notesTask || '',
+        "Last Communication": t.official?.lastCommunication || '',
+        "Last Withdrawal Date": t.official?.lastWithdrawalAt ? getTorontoDateString(t.official.lastWithdrawalAt) : ''
+      }));
+
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, "Terminals");
+      XLSX.writeFile(book, `All-Terminals-${getTorontoDateString()}.xlsx`);
+      toast.success(`Exported ${allItems.length} terminals`);
+    } catch (err) {
+      toast.error(err.message || "Failed to export terminals");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const show = v => v === 0 ? 0 : v || '—';
+  const date = v => v ? getTorontoDateString(v) : '—';
+
+  return (
+    <>
+      <div className="toolbar" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <input placeholder="Search terminal, business, city or address..." value={q} onChange={e => setQ(e.target.value)} style={{ flex: 1 }} />
+        <span>{data.total || 0} terminals</span>
+        <button onClick={exportAll} disabled={exporting} style={{ padding: '6px 14px', background: '#2a5aaa', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: exporting ? 'not-allowed' : 'pointer' }}>
+          {exporting ? 'Exporting...' : 'Download All (Excel)'}
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+      <div className="table-wrap full-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Status</th><th>Terminal ID</th><th>Temp Name</th><th>Name</th><th>Address</th><th>City</th><th>Location Area</th><th>Wish Amount</th><th>Cash Balance</th><th>Cashloading</th><th>Agent</th><th>Notes/Task</th><th>Last Communication</th><th>Last Withdrawal Date</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.items.map(t => (
+              <tr key={t.terminalId}>
+                <td>
+                  <select className={'status-select ' + (t.official?.status?.toLowerCase())} value={t.official?.status === 'Inactive' ? 'Inactive' : 'Active'} onChange={e => changeStatus(t, e.target.value)}>
+                    <option>Active</option><option>Inactive</option>
+                  </select>
+                </td>
+                <td><b>{t.terminalId}</b></td>
+                <td>{show(t.official?.tempName)}</td>
+                <td>{show(t.official?.name)}</td>
+                <td className="wide-cell">{show(t.official?.address)}</td>
+                <td>{show(t.official?.city)}</td>
+                <td>{show(t.official?.locationArea)}</td>
+                <td>{money(t.official?.wishAmount)}</td>
+                <td>{money(t.official?.cashBalance)}</td>
+                <td>{show(t.official?.cashLoading)}</td>
+                <td>{show(t.official?.agent)}</td>
+                <td className="wide-cell">{show(t.official?.notesTask)}</td>
+                <td>{show(t.official?.lastCommunication)}</td>
+                <td>{date(t.official?.lastWithdrawalAt)}</td>
+                <td><button className="link" onClick={() => setSelected(t)}>View &#8594;</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {selected && <Drawer t={selected} close={() => setSelected(null)} />}
+    </>
+  );
 }
 
 function Drawer({t,close}){return <div className="overlay" onClick={close}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="close" onClick={close}>&#215;</button><p className="eyebrow">TERMINAL RECORD</p><h2>{t.terminalId}</h2><span className="pill active">{t.official?.status}</span><h4>Original installation</h4><b>{t.original?.businessName||'Not recorded'}</b><p>{t.original?.address}</p><h4>Current assignment</h4><b>{t.current?.businessName||'Unassigned'}</b><p>{t.current?.address}</p><div className="amount"><small>PAYMENT AMOUNT</small><strong>{money(t.current?.paymentAmount)}</strong></div><h4>Assignment history</h4><p className="muted">{t.assignmentHistory?.length||0} recorded movement(s)</p></aside></div>;}
