@@ -443,7 +443,7 @@ export default function TerminalRegistry() {
                             className={`status-select ${t.official?.status?.toLowerCase()}`}
                             value={['Active', 'Inactive', 'Never Communicated'].includes(t.official?.status) ? t.official?.status : 'Active'}
                             onChange={e => updateStatus(t, e.target.value)}
-                            disabled={isAgent}
+                            disabled={isAgent && !user.canChangeTerminalStatus}
                           >
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
@@ -614,6 +614,7 @@ export default function TerminalRegistry() {
             setSelected(updated);
           }}
           isAgent={isAgent}
+          canChangeStatus={!isAgent || user.canChangeTerminalStatus}
         />
       )}
     </>
@@ -621,7 +622,7 @@ export default function TerminalRegistry() {
 }
 
 /* ── Terminal Detail Modal ────────────────────────────────────────────────── */
-function TerminalModal({ t, onClose, onStatusChange, isAgent, onSave }) {
+function TerminalModal({ t, onClose, onStatusChange, isAgent, canChangeStatus, onSave }) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [formData, setFormData] = React.useState({});
   const [saving, setSaving] = React.useState(false);
@@ -760,7 +761,7 @@ function TerminalModal({ t, onClose, onStatusChange, isAgent, onSave }) {
               className={`status-select ${t.official?.status?.toLowerCase()}`}
               value={['Active', 'Inactive', 'Never Communicated'].includes(t.official?.status) ? t.official?.status : 'Active'}
               onChange={e => onStatusChange(t, e.target.value)}
-              disabled={isAgent}
+              disabled={!canChangeStatus}
               style={{ width: '100%', padding: '8px', marginTop: '8px' }}
             >
               <option value="Active">Active</option>

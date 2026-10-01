@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function AtmRemovalForm({ initialData = null, readOnly = false }) {
+export default function AtmRemovalForm({ initialData = null, readOnly = false, onSuccess }) {
   const [form, setForm] = useState(initialData || {
     terminalId: '', date: '', time: '',
     locationName: '', address: '',
@@ -27,6 +27,9 @@ export default function AtmRemovalForm({ initialData = null, readOnly = false })
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to save');
       setMsg({ text: 'Removal form saved successfully!', type: 'success' });
+      if (onSuccess) {
+        setTimeout(() => onSuccess(form.terminalId), 1500);
+      }
     } catch (err) { setMsg({ text: err.message, type: 'error' }); }
     finally { setLoading(false); }
   };

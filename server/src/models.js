@@ -39,6 +39,7 @@ const userSchema = new mongoose.Schema({
   phoneNumber: { type: String, trim: true }, profilePicture: { storedName: String, mimeType: String, originalName: String, size: Number, url: String },
   passwordHash: { type: String, required: true }, role: { type: String, enum: ['admin', 'user', 'agent'], default: 'user' },
   allowedTabs: { type: [String], default: ['terminals', 'tickets', 'jobs', 'routesheet'] },
+  canChangeTerminalStatus: { type: Boolean, default: false },
   active: { type: Boolean, default: true }, lastLoginAt: Date
 }, { timestamps: true });
 

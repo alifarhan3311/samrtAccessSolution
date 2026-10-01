@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function AtmInstallationForm({ initialData = null, readOnly = false }) {
+export default function AtmInstallationForm({ initialData = null, readOnly = false, onSuccess }) {
   const [form, setForm] = useState(initialData || {
     terminalId: '', date: '', newTerminalId: '', oldTerminalId: '',
     locationName: '', locationStreet: '', locationCity: '', locationPostalCode: '',
@@ -38,6 +38,9 @@ export default function AtmInstallationForm({ initialData = null, readOnly = fal
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to save');
       setMsg({ text: 'Terminal registered and form saved successfully!', type: 'success' });
+      if (onSuccess) {
+        setTimeout(() => onSuccess(form.terminalId), 1500);
+      }
     } catch (err) { setMsg({ text: err.message, type: 'error' }); }
     finally { setLoading(false); }
   };

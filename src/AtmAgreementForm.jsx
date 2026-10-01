@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function AtmAgreementForm({ initialData = null, readOnly = false }) {
+export default function AtmAgreementForm({ initialData = null, readOnly = false, onSuccess }) {
   const [form, setForm] = useState(initialData || {
     terminalId: '', customerName: '', address: '', postalCode: '',
     telephone: '', email: '', fax: '', date: '', cellPhone: '',
@@ -28,6 +28,9 @@ export default function AtmAgreementForm({ initialData = null, readOnly = false 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to save');
       setMsg({ text: 'Agreement form saved successfully!', type: 'success' });
+      if (onSuccess) {
+        setTimeout(() => onSuccess(form.terminalId), 1500);
+      }
     } catch (err) { setMsg({ text: err.message, type: 'error' }); }
     finally { setLoading(false); }
   };

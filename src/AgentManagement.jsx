@@ -8,7 +8,7 @@ async function api(path,options={}){
   return d;
 }
 
-const EMPTY_FORM={name:'',email:'',phoneNumber:'',password:'',allowedTabs:['terminals','tickets','jobs','routesheet']};
+const EMPTY_FORM={name:'',email:'',phoneNumber:'',password:'',allowedTabs:['terminals','tickets','jobs','routesheet'],canChangeTerminalStatus:false};
 
 const ALL_TABS = [
   { id: 'dashboard', label: 'Command Center (Dashboard)' },
@@ -51,7 +51,7 @@ export default function AgentManagement(){
 
   function startEdit(agent){
     setEditing(agent);
-    setForm({name:agent.name,email:agent.email,phoneNumber:agent.phoneNumber||'',password:'',allowedTabs:agent.allowedTabs||['terminals','tickets','jobs','routesheet']});
+    setForm({name:agent.name,email:agent.email,phoneNumber:agent.phoneNumber||'',password:'',allowedTabs:agent.allowedTabs||['terminals','tickets','jobs','routesheet'],canChangeTerminalStatus:agent.canChangeTerminalStatus||false});
     setPicture(null);setPreview(null);setMsg('');
   }
   function cancelEdit(){setEditing(null);setForm(EMPTY_FORM);setPicture(null);setPreview(null);setMsg('');}
@@ -68,6 +68,8 @@ export default function AgentManagement(){
         if(k==='allowedTabs'){
           if(v.length===0) body.append('allowedTabs','');
           else v.forEach(t=>body.append('allowedTabs',t));
+        }else if(k==='canChangeTerminalStatus'){
+          body.append(k,v);
         }else{
           body.append(k,v);
         }
@@ -82,6 +84,9 @@ export default function AgentManagement(){
       if(tabsChanged){
         if(form.allowedTabs.length===0) body.append('allowedTabs','');
         else form.allowedTabs.forEach(t=>body.append('allowedTabs',t));
+      }
+      if(form.canChangeTerminalStatus!==editing.canChangeTerminalStatus){
+        body.append('canChangeTerminalStatus',form.canChangeTerminalStatus);
       }
       if(picture)body.append('picture',picture);
     }
@@ -145,6 +150,12 @@ export default function AgentManagement(){
         <div className="tab-access-section" style={{marginTop:'1.5rem',paddingTop:'1.5rem',borderTop:'1px solid var(--border)'}}>
           <h4 style={{marginBottom:'0.2rem'}}>Tab Access Permissions</h4>
           <p className="muted" style={{marginBottom:'1rem',fontSize:'0.85rem'}}>Select which tabs this agent is allowed to view and interact with.</p>
+          <div style={{marginBottom:'1.5rem'}}>
+            <label style={{display:'inline-flex',flexDirection:'row',alignItems:'center',gap:'0.5rem',cursor:'pointer',fontSize:'0.9rem',background:'#e0f2fe',color:'#0369a1',padding:'0.6rem 1rem',borderRadius:'0.4rem',fontWeight:'600'}}>
+              <input type="checkbox" checked={form.canChangeTerminalStatus} onChange={e=>setForm({...form,canChangeTerminalStatus:e.target.checked})}/>
+              Allow modifying Terminal Status (Active/Inactive)
+            </label>
+          </div>
           <div className="checkbox-grid" style={{display:'grid',gridTemplateColumns:'repeat(2, 1fr)',gap:'0.75rem',marginBottom:'1.5rem'}}>
             {ALL_TABS.map(tab=>(
               <label key={tab.id} style={{display:'flex',flexDirection:'row',alignItems:'center',gap:'0.5rem',cursor:'pointer',fontSize:'0.85rem',background:'#f4f7f2',padding:'0.5rem',borderRadius:'0.4rem'}}>

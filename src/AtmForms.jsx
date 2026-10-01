@@ -131,13 +131,28 @@ export default function AtmForms() {
     fetchTimelineFor(searchId);
   };
 
+  const handleModalSuccess = (terminalId) => {
+    setActiveModal(null);
+    setViewingForm(null);
+    if (terminalId) {
+      setSearchId(terminalId);
+      fetchTimelineFor(terminalId);
+    }
+  };
+
   const renderModalContent = () => {
-    const props = { initialData: viewingForm, readOnly: !!viewingForm };
+    const props = { initialData: viewingForm, readOnly: !!viewingForm, onSuccess: handleModalSuccess };
     switch (activeModal) {
       case 'installation': return <AtmInstallationForm {...props} />;
       case 'agreement': return <AtmAgreementForm {...props} />;
       case 'removal': return <AtmRemovalForm {...props} />;
-      case 'setup': return <AssignTerminal initialData={viewingForm} readOnly={!!viewingForm} />;
+      case 'setup': return <AssignTerminal initialData={viewingForm} readOnly={!!viewingForm} onDone={handleModalSuccess} />;
+      case 'reprogram': return (
+        <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+          <h2>⚙️ ATM Reprogram Form</h2>
+          <p style={{ marginTop: '10px', color: '#666' }}>This form module is currently under development.</p>
+        </div>
+      );
       default: return null;
     }
   };
