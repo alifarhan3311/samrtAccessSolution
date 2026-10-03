@@ -270,7 +270,7 @@ function Shell(){
     ['history','ATM movement history','◷','/history'],
     ['logs','Activity & Audit Logs','📋','/logs'],
     ['import','Official data sync','⇅','/import'],
-    ['master-upload','Master Sheet Upload','📂','/master-upload'],
+    // ['master-upload','Master Sheet Upload','📂','/master-upload'],
     ['atm','ATM Forms','📝','/atm']
   ];
 
