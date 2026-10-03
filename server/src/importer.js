@@ -374,7 +374,7 @@ async function importWorkbook(buffer, fileName, userId, io) {
 
   // ── 4. HANDLE REMOVED/MISSING TERMINALS ──────────────────────────────
   let removedItems = [];
-  if (format === 'canada_status') {
+  if (false && format === 'canada_status') { // Disabled: Multiple source files used
     removedItems = await Terminal.find(
       { terminalId: { $nin: terminalIdsArray }, 'official.sourcePresent': true }
     ).select('terminalId official.name official.city').lean();
