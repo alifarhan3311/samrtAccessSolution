@@ -11,6 +11,9 @@ export default function AtmForms() {
   const [viewingForm, setViewingForm] = useState(null);
   const [previewImageUrl, setPreviewImageUrl] = useState(null);
 
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = user.role === 'admin';
+
   // Search & Filter State
   const [searchId, setSearchId] = useState('');
   const [searchedTerminalId, setSearchedTerminalId] = useState('');
@@ -20,6 +23,10 @@ export default function AtmForms() {
   const [timelineData, setTimelineData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Upload Form State (Left Column)
   const fileInputRef = useRef(null);
@@ -34,6 +41,10 @@ export default function AtmForms() {
     locationName: '',
     remarks: ''
   });
+
+  useEffect(() => {
+    fetchTimelineFor('');
+  }, []);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -108,17 +119,18 @@ export default function AtmForms() {
   };
 
   const fetchTimelineFor = async (idToSearch) => {
-    if (!idToSearch.trim()) return;
+    const isGlobal = !idToSearch.trim();
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/atm/timeline/${encodeURIComponent(idToSearch.trim())}`, {
+      const url = isGlobal ? '/api/atm/timeline' : `/api/atm/timeline/${encodeURIComponent(idToSearch.trim())}`;
+      const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Error fetching timeline');
       setTimelineData(data);
-      setSearchedTerminalId(idToSearch.trim());
+      setSearchedTerminalId(isGlobal ? 'All Terminals' : idToSearch.trim());
     } catch (err) {
       setError(err.message);
       setTimelineData(null);
@@ -205,6 +217,29 @@ export default function AtmForms() {
                 </svg>
                 <span>View Form</span>
               </button>
+
+              {isAdmin && (
+                <button
+                  title="Delete Form Record"
+                  className="timeline-view-action-btn"
+                  style={{ color: '#ef4444', borderColor: '#ef4444', backgroundColor: 'transparent' }}
+                  onClick={async () => {
+                    if (!window.confirm(`Are you sure you want to delete this ${event.title} record?`)) return;
+                    try {
+                      const res = await fetch(`/api/atm/form/${event.type}/${event.data._id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                      });
+                      if (!res.ok) throw new Error('Failed to delete form');
+                      fetchTimelineFor(searchId); // Refresh
+                    } catch (e) {
+                      alert(e.message);
+                    }
+                  }}
+                >
+                  <span>Delete</span>
+                </button>
+              )}
             </div>
           </div>
           <div className="timeline-body">
@@ -241,6 +276,14 @@ export default function AtmForms() {
 
     return true;
   }) : [];
+
+  // Reset pagination on filter or data changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [timelineData, filterType, fromDate, toDate]);
+
+  const totalPages = Math.ceil(filteredTimeline.length / itemsPerPage);
+  const paginatedTimeline = filteredTimeline.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="atm-forms-container">
@@ -487,9 +530,33 @@ export default function AtmForms() {
                   <p className="no-timeline-data">No records matching the selected date range or form type filters.</p>
                 </div>
               ) : (
-                <div className="timeline-list">
-                  {filteredTimeline.map((evt, i) => renderTimelineEvent(evt, i))}
-                </div>
+                <>
+                  <div className="timeline-list">
+                    {paginatedTimeline.map((evt, i) => renderTimelineEvent(evt, i))}
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px', alignItems: 'center' }}>
+                      <button 
+                        style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        ← Previous
+                      </button>
+                      <span style={{ fontSize: '14px', color: '#64748b' }}>
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button 
+                        style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1 }}
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

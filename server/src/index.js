@@ -1171,6 +1171,44 @@ app.post('/api/atm/upload-form', auth, permit('admin', 'agent', 'atm'), proofUpl
     });
   } catch (e) { next(e); }
 });
+app.get('/api/atm/timeline', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
+  try {
+    const [installations, agreements, removals, setups] = await Promise.all([
+      AtmInstallation.find().sort({ date: -1, createdAt: -1 }).limit(100).populate('createdBy', 'name').lean(),
+      AtmAgreement.find().sort({ date: -1, createdAt: -1 }).limit(100).populate('createdBy', 'name').lean(),
+      AtmRemoval.find().sort({ date: -1, createdAt: -1 }).limit(100).populate('createdBy', 'name').lean(),
+      AtmSetup.find().sort({ date: -1, createdAt: -1 }).limit(100).populate('createdBy', 'name').lean()
+    ]);
+
+    const timeline = [
+      ...installations.map(doc => ({ type: 'AtmInstallation', title: 'ATM Installation', date: doc.date || doc.createdAt, data: doc })),
+      ...agreements.map(doc => ({ type: 'AtmAgreement', title: 'ATM Agreement', date: doc.date || doc.createdAt, data: doc })),
+      ...removals.map(doc => ({ type: 'AtmRemoval', title: 'ATM Removal', date: doc.date || doc.createdAt, data: doc })),
+      ...setups.map(doc => ({ type: 'AtmSetup', title: 'ATM Setup & Location', date: doc.date || doc.createdAt, data: doc }))
+    ];
+
+    timeline.sort((a, b) => new Date(b.date) - new Date(a.date));
+    res.json(timeline.slice(0, 200));
+  } catch (e) { next(e); }
+});
+
+app.delete('/api/atm/form/:type/:id', auth, permit('admin'), async (req, res, next) => {
+  try {
+    const { type, id } = req.params;
+    let Model;
+    if (type === 'AtmInstallation') Model = AtmInstallation;
+    else if (type === 'AtmAgreement') Model = AtmAgreement;
+    else if (type === 'AtmRemoval') Model = AtmRemoval;
+    else if (type === 'AtmSetup') Model = AtmSetup;
+    else return res.status(400).json({ message: 'Invalid form type' });
+
+    const record = await Model.findByIdAndDelete(id);
+    if (!record) return res.status(404).json({ message: 'Record not found' });
+
+    await audit(req, 'ATM_FORM_DELETED', type, id, { terminalId: record.terminalId });
+    res.json({ message: 'Form deleted successfully' });
+  } catch (e) { next(e); }
+});
 
 app.get('/api/atm/timeline/:terminalId', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
   try {
