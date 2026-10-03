@@ -168,6 +168,7 @@ function extractTerminalManagement(row, headers) {
     lastTransTime:      date(pick(row, headers, [/last\s*trans\s*time/i])),
     lastCommunication:  commStr,
     totalCassetteValue: num(pick(row, headers, [/total\s*cassette\s*value/i])),
+    cashBalance:        num(pick(row, headers, [/total\s*cassette\s*value/i])),
     totalCassetteCount: num(pick(row, headers, [/total\s*cassette\s*count/i])),
     lastSettledTime:    date(pick(row, headers, [/last\s*settled/i])),
     lastWithdrawalAt:   settledDate,
