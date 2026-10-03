@@ -250,7 +250,9 @@ app.get('/api/location-areas', auth, async (req, res, next) => {
       { $group: { _id: '$official.locationArea', terminals: { $sum: 1 }, cities: { $addToSet: { $ifNull: ['$official.city', '$current.city'] } } } },
       { $sort: { _id: 1 } }
     ]);
-    const mapped = areas.map(a => ({ name: a._id, terminals: a.terminals, cities: a.cities.filter(Boolean) }));
+    const mapped = areas
+      .filter(a => !/^(inactive|never communicated)$/i.test(a._id))
+      .map(a => ({ name: a._id, terminals: a.terminals, cities: a.cities.filter(Boolean) }));
     const neverCommCount = await Terminal.countDocuments({ 'official.lastCommunication': 'Never Communicated' });
     const inactiveCount = await Terminal.countDocuments({ 'official.status': 'Inactive' });
     mapped.push({ name: 'Never Communicated', terminals: neverCommCount, cities: [] });

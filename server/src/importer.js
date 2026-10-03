@@ -207,7 +207,7 @@ async function importWorkbook(buffer, fileName, userId, io) {
   
   for (const r of rawData) {
     const tid = clean(pick(r, headers, [/terminal\s*id/i])).toUpperCase();
-    if (tid && !seen.has(tid)) {
+    if (tid && !seen.has(tid) && !tid.includes('TOTAL') && !tid.includes('BALANCE')) {
       seen.add(tid);
       data.push({ row: r, terminalId: tid });
     }
