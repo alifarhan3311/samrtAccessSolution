@@ -1,8 +1,8 @@
 import React,{useEffect,useState}from'react';
 import LoadingSpinner from './LoadingSpinner.jsx';
-const authH=()=>({Authorization:`Bearer ${localStorage.getItem('token')}`});
+const authH=()=>({});
 async function api(path,options={}){
-  const r=await fetch('/api'+path,{...options,headers:{...(!options.body||options.body instanceof FormData?{}:{'Content-Type':'application/json'}),...authH(),...(options.headers||{})}});
+  const r=await fetch('/api'+path, { credentials: 'include',...options,headers:{...(!options.body||options.body instanceof FormData?{}:{'Content-Type':'application/json'}),...authH(),...(options.headers||{})}});
   const d=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(d.message||'Request failed');
   return d;
@@ -92,10 +92,10 @@ export default function AgentManagement(){
     }
     try{
       if(!editing){
-        await fetch('/api/users/agents',{method:'POST',headers:authH(),body});
+        await fetch('/api/users/agents', { credentials: 'include',method:'POST',headers:authH(),body});
         setMsg('Agent account created successfully.');
       }else{
-        await fetch(`/api/users/agents/${editing._id}`,{method:'PATCH',headers:authH(),body});
+        await fetch(`/api/users/agents/${editing._id}`, { credentials: 'include',method:'PATCH',headers:authH(),body});
         setMsg('Agent updated successfully.');
       }
       setForm(EMPTY_FORM);setPicture(null);setPreview(null);setEditing(null);load();

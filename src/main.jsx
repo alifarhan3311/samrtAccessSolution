@@ -20,7 +20,6 @@ import Discrepancies from './Discrepancies.jsx';
 import SystemLogs from './SystemLogs.jsx';
 import Tickets from './Tickets.jsx';
 import AtmForms from './AtmForms.jsx';
-import MasterUpload from './MasterUpload.jsx';
 import './style.css';
 import './terminal.css';
 import './history.css';
@@ -46,7 +45,7 @@ window.fetch = async (...args) => {
   const response = await nativeFetch(...args);
   const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
   if (response.status === 401 && !url.includes('/api/auth/login')) {
-    localStorage.removeItem('token'); localStorage.removeItem('user');
+    localStorage.removeItem('user');
     if (!sessionStorage.getItem('sessionResetting')) { sessionStorage.setItem('sessionResetting', '1'); window.location.replace('/') }
   }
   return response;
@@ -55,8 +54,8 @@ sessionStorage.removeItem('sessionResetting');
 
 const API = '/api';
 async function request(path, options = {}) {
-  const token = localStorage.getItem('token');
-  const r = await fetch(API + path, { ...options, headers: { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers } });
+  
+  const r = await fetch(API + path, { credentials: 'include', ...options, headers: { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),  ...options.headers } });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.message || 'Request failed');
   return data;
@@ -72,7 +71,7 @@ function Login({ done }) {
     setError('');
     try {
       const d = await request('/auth/login', { method: 'POST', body: JSON.stringify(form) });
-      localStorage.setItem('token', d.token);
+      
       localStorage.setItem('user', JSON.stringify(d.user));
       done(d.user);
     } catch (e) {
@@ -198,7 +197,7 @@ function Shell() {
   useEffect(() => {
     if (!user) return;
     const socket = io('/', {
-      auth: { token: localStorage.getItem('token') },
+      withCredentials: true,
       transports: ['websocket', 'polling']
     });
     socket.on('terminal_alert', (data) => {
@@ -252,7 +251,11 @@ function Shell() {
   }, [user]);
 
   if (!user) return <Login done={u => { setUser(u); navigate(u.role === 'agent' ? '/jobs' : '/dashboard') }} />;
-  const logout = () => { localStorage.clear(); setUser(null) };
+  const logout = async () => { 
+    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch (e) {} 
+    localStorage.clear(); 
+    setUser(null); 
+  };
   const admin = user.role === 'admin', agent = user.role === 'agent';
   const can = (tab) => admin || (user.allowedTabs || []).includes(tab);
 
@@ -299,7 +302,6 @@ function Shell() {
     discrepancies: 'Cash discrepancies & alerts',
     logs: 'System Activity & Audit Logs',
     import: 'Official data sync',
-    'master-upload': 'Master Sheet Upload',
     atm: 'ATM Forms'
   };
 
@@ -318,7 +320,6 @@ function Shell() {
       history: '/history',
       logs: '/logs',
       import: '/import',
-      'master-upload': '/master-upload',
       atm: '/atm'
     };
     navigate(pathMap[targetKey] || (targetKey.startsWith('/') ? targetKey : `/${targetKey}`));
@@ -357,7 +358,6 @@ function Shell() {
         <Route path="/history" element={can('history') ? <AssignmentHistory /> : <Navigate to="/jobs" replace />} />
         <Route path="/logs" element={can('logs') ? <SystemLogs /> : <Navigate to="/jobs" replace />} />
         <Route path="/import" element={can('import') ? <OfficialImport /> : <Navigate to="/jobs" replace />} />
-        <Route path="/master-upload" element={can('import') ? <MasterUpload /> : <Navigate to="/jobs" replace />} />
         <Route path="/tickets" element={<Tickets />} />
         <Route path="/atm" element={can('atm') ? <AtmForms /> : <Navigate to="/jobs" replace />} />
         <Route path="*" element={<Navigate to={agent ? '/jobs' : '/dashboard'} replace />} />

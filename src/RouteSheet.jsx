@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import './route-sheet.css';
 
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+const auth = () => ({  });
 
 async function json(path, options = {}) {
-  const r = await fetch('/api' + path, {
+  const r = await fetch('/api' + path, { credentials: 'include',
     ...options,
     headers: { 'Content-Type': 'application/json', ...auth(), ...options.headers }
   });
@@ -294,7 +294,7 @@ export default function RouteSheet() {
                       {group.jobs.map((job, jIdx) => {
                         const term = job.terminal || {};
                         const bizName = term.current?.businessName || term.official?.name || job.businessName;
-                        const address = term.current?.address || job.address;
+                        const address = term.current?.address || job.address || term.official?.address;
                         const city = term.current?.city || term.official?.city || job.city;
                         const status = term.official?.status === 'Inactive' ? 'Down' : 'Up';
                         const remain = Math.floor((term.official?.cashBalance || 0) / 20);

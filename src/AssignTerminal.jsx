@@ -1,5 +1,5 @@
 import React,{useEffect,useState}from'react';
-const req=async(p,o={})=>{const r=await fetch('/api'+p,{...o,headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('token')}`,...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
+const req=async(p,o={})=>{const r=await fetch('/api'+p, { credentials: 'include',...o,headers:{'Content-Type':'application/json',...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 
 export default function AssignTerminal({ initialTerminalId, initialData, readOnly, onDone }){
   const[id,setId]=useState(initialTerminalId||'');

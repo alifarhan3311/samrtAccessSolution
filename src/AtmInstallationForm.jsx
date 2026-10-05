@@ -30,9 +30,9 @@ export default function AtmInstallationForm({ initialData = null, readOnly = fal
     if (!form.terminalId) return setMsg({ text: 'Terminal ID is required to save.', type: 'error' });
     setLoading(true); setMsg({ text: '', type: '' });
     try {
-      const res = await fetch('/api/atm/installation', {
+      const res = await fetch('/api/atm/installation', { credentials: 'include',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
       });
       const data = await res.json();
@@ -49,8 +49,8 @@ export default function AtmInstallationForm({ initialData = null, readOnly = fal
     if (!searchId) return;
     setLoading(true); setMsg({ text: '', type: '' });
     try {
-      const res = await fetch(`/api/atm/installation/${encodeURIComponent(searchId)}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      const res = await fetch(`/api/atm/installation/${encodeURIComponent(searchId)}`, { credentials: 'include',
+        headers: {  }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Form not found');

@@ -20,9 +20,9 @@ export default function AtmAgreementForm({ initialData = null, readOnly = false,
     if (!form.terminalId) return setMsg({ text: 'Terminal ID is required to save.', type: 'error' });
     setLoading(true); setMsg({ text: '', type: '' });
     try {
-      const res = await fetch('/api/atm/agreement', {
+      const res = await fetch('/api/atm/agreement', { credentials: 'include',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
       });
       const data = await res.json();
@@ -40,8 +40,8 @@ export default function AtmAgreementForm({ initialData = null, readOnly = false,
     setLoading(true); setMsg({ text: '', type: '' });
     try {
       // First try to fetch an existing agreement form
-      let res = await fetch(`/api/atm/timeline/${encodeURIComponent(searchId)}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      let res = await fetch(`/api/atm/timeline/${encodeURIComponent(searchId)}`, { credentials: 'include',
+        headers: {  }
       });
       const timelineData = await res.json();
       
@@ -54,8 +54,8 @@ export default function AtmAgreementForm({ initialData = null, readOnly = false,
         setMsg({ text: 'Agreement loaded successfully.', type: 'success' });
       } else {
         // Fallback: try to pre-fill from terminal registry or installation form
-        const baseRes = await fetch(`/api/atm/installation/${encodeURIComponent(searchId)}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        const baseRes = await fetch(`/api/atm/installation/${encodeURIComponent(searchId)}`, { credentials: 'include',
+          headers: {  }
         });
         
         if (baseRes.ok) {

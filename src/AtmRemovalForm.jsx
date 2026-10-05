@@ -19,9 +19,9 @@ export default function AtmRemovalForm({ initialData = null, readOnly = false, o
     if (!form.terminalId) return setMsg({ text: 'Terminal ID is required to save.', type: 'error' });
     setLoading(true); setMsg({ text: '', type: '' });
     try {
-      const res = await fetch('/api/atm/removal', {
+      const res = await fetch('/api/atm/removal', { credentials: 'include',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
       });
       const data = await res.json();
@@ -38,8 +38,8 @@ export default function AtmRemovalForm({ initialData = null, readOnly = false, o
     if (!searchId) return;
     setLoading(true); setMsg({ text: '', type: '' });
     try {
-      let res = await fetch(`/api/atm/timeline/${encodeURIComponent(searchId)}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      let res = await fetch(`/api/atm/timeline/${encodeURIComponent(searchId)}`, { credentials: 'include',
+        headers: {  }
       });
       const timelineData = await res.json();
       
@@ -52,8 +52,8 @@ export default function AtmRemovalForm({ initialData = null, readOnly = false, o
         setForm(prev => ({ ...prev, ...data }));
         setMsg({ text: 'Removal form loaded successfully.', type: 'success' });
       } else {
-        const baseRes = await fetch(`/api/atm/installation/${encodeURIComponent(searchId)}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        const baseRes = await fetch(`/api/atm/installation/${encodeURIComponent(searchId)}`, { credentials: 'include',
+          headers: {  }
         });
         
         if (baseRes.ok) {

@@ -4,7 +4,7 @@ const { User, Audit } = require('./models');
 function sign(user) { return jwt.sign({ sub: user.id, role: user.role, name: user.name }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }); }
 async function auth(req, res, next) {
   try {
-    const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+    const token = req.cookies?.token || req.headers.authorization?.replace(/^Bearer\s+/i, '');
     if (!token) return res.status(401).json({ message: 'Authentication required' });
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(payload.sub).select('-passwordHash');

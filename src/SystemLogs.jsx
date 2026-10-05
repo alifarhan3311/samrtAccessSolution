@@ -3,10 +3,10 @@ import LoadingSpinner from './LoadingSpinner.jsx';
 import { getTorontoDateString } from './timezone';
 import './system-logs.css';
 
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+const auth = () => ({  });
 
 async function request(path, options = {}) {
-  const r = await fetch('/api' + path, {
+  const r = await fetch('/api' + path, { credentials: 'include',
     ...options,
     headers: { 'Content-Type': 'application/json', ...auth(), ...options.headers }
   });

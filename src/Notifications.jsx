@@ -4,7 +4,7 @@ import AssignTerminal from './AssignTerminal.jsx';
 import './atm-forms.css';
 import { getTorontoDateString, getTorontoDateTimeFormatted } from './timezone';
 
-const auth=()=>({Authorization:`Bearer ${localStorage.getItem('token')}`});
+const auth=()=>({});
 const names={status:'Status',tempName:'Temp Name',name:'Business Name',address:'Address',city:'City',locationArea:'Location Area',wishAmount:'Wish Amount',cashBalance:'Cash Balance',cashLoading:'Cash Loading',agent:'Agent',notesTask:'Notes/Task',lastCommunication:'Last Communication',lastWithdrawalAt:'Last Withdrawal Date'};
 const value=v=>v instanceof Date?getTorontoDateString(v):v===null||v===undefined||v===''?'Empty':String(v);
 
@@ -70,7 +70,7 @@ export default function Notifications({go}){
 
   const loadData=()=>{
     setLoading(true);
-    fetch('/api/notifications',{headers:auth()})
+    fetch('/api/notifications', { credentials: 'include',headers:auth()})
       .then(r=>r.json())
       .then(d=>{setData(d);setLoading(false);})
       .catch(()=>setLoading(false));

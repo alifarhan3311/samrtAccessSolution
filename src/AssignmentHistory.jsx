@@ -10,8 +10,8 @@ const when  = v => v ? getTorontoDateString(v) : 'Current';
 async function loadHistory(filters) {
   const query = new URLSearchParams({ ...filters, limit: '5000' });
   for (const [k, v] of [...query]) if (!v) query.delete(k);
-  const r = await fetch('/api/assignment-history?' + query, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+  const r = await fetch('/api/assignment-history?' + query, { credentials: 'include',
+    headers: {  }
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.message || 'Could not load assignment history');
@@ -48,8 +48,7 @@ export default function AssignmentHistory() {
       'Ended Date & Time':    item.endedAt    ? new Date(item.endedAt)    : 'Current',
       'Assigned By':          item.assignedBy,
       'Admin Email':          item.assignedByEmail,
-      'Note':                 item.note,
-    }));
+      'Note':                 item.note }));
     const sheet = XLSX.utils.json_to_sheet(rows);
     sheet['!cols'] = [
       { wch: 16 }, { wch: 24 }, { wch: 34 }, { wch: 24 }, { wch: 34 },

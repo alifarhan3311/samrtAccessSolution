@@ -5,10 +5,10 @@ import LoadingSpinner from './LoadingSpinner.jsx';
 import './terminal.css';
 
 const money = v => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(v || 0);
-const auth  = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+const auth  = () => ({  });
 
 async function req(path, options = {}) {
-  const r = await fetch('/api' + path, {
+  const r = await fetch('/api' + path, { credentials: 'include',
     ...options,
     headers: { 'Content-Type': 'application/json', ...auth(), ...options.headers }
   });
@@ -650,9 +650,9 @@ function TerminalModal({ t, onClose, onStatusChange, isAgent, canChangeStatus, o
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/terminals/${t.terminalId}`, {
+      const res = await fetch(`/api/terminals/${t.terminalId}`, { credentials: 'include',
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
       if (!res.ok) throw new Error((await res.json()).message || 'Failed to update');

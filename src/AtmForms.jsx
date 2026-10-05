@@ -82,10 +82,10 @@ export default function AtmForms() {
       if (uploadForm.locationName) formData.append('locationName', uploadForm.locationName);
       if (uploadForm.remarks) formData.append('remarks', uploadForm.remarks);
 
-      const res = await fetch('/api/atm/upload-form', {
+      const res = await fetch('/api/atm/upload-form', { credentials: 'include',
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          
         },
         body: formData
       });
@@ -124,8 +124,8 @@ export default function AtmForms() {
     setError('');
     try {
       const url = isGlobal ? '/api/atm/timeline' : `/api/atm/timeline/${encodeURIComponent(idToSearch.trim())}`;
-      const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      const res = await fetch(url, { credentials: 'include',
+        headers: {  }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Error fetching timeline');
@@ -226,9 +226,9 @@ export default function AtmForms() {
                   onClick={async () => {
                     if (!window.confirm(`Are you sure you want to delete this ${event.title} record?`)) return;
                     try {
-                      const res = await fetch(`/api/atm/form/${event.type}/${event.data._id}`, {
+                      const res = await fetch(`/api/atm/form/${event.type}/${event.data._id}`, { credentials: 'include',
                         method: 'DELETE',
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                        headers: {  }
                       });
                       if (!res.ok) throw new Error('Failed to delete form');
                       fetchTimelineFor(searchId); // Refresh

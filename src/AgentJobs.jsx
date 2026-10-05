@@ -3,10 +3,10 @@ import { getTorontoDateString } from './timezone';
 import LoadingSpinner from './LoadingSpinner.jsx';
 import './agent-jobs.css';
 
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+const auth = () => ({  });
 
 async function json(path, options = {}) {
-  const r = await fetch('/api' + path, {
+  const r = await fetch('/api' + path, { credentials: 'include',
     ...options,
     headers: { 'Content-Type': 'application/json', ...auth(), ...options.headers }
   });
@@ -22,8 +22,7 @@ const STATUS_LABEL = {
   cash_loaded:    'Cash Loaded',
   issue_reported: 'Issue Reported',
   approved:       'Approved',
-  cancelled:      'Cancelled',
-};
+  cancelled:      'Cancelled' };
 
 const STATUS_COLOR = {
   assigned:       '#78958e',
@@ -32,8 +31,7 @@ const STATUS_COLOR = {
   cash_loaded:    '#d2a437',
   issue_reported: '#d76858',
   approved:       '#48a972',
-  cancelled:      '#b0b8b4',
-};
+  cancelled:      '#b0b8b4' };
 
 // ── CSV Helpers ──────────────────────────────────────────────────────────────
 function jobsToCSV(jobs) {
@@ -156,7 +154,7 @@ export default function AgentJobs({ role }) {
     }
     setActionLoading(`proof_${file.storedName}`);
     try {
-      const r = await fetch(`/api/jobs/${job._id}/proofs/${file.storedName}`, { headers: auth() });
+      const r = await fetch(`/api/jobs/${job._id}/proofs/${file.storedName}`, { credentials: 'include', headers: auth() });
       if (!r.ok) { setActionLoading(''); return setMsg('Could not open proof'); }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
@@ -457,7 +455,7 @@ function JobUpdate({ job, admin, close, saved }) {
       fd.append('note', note);
       if (status === 'cash_loaded') fd.append('cashLoaded', cash);
       [...files].forEach(f => fd.append('proofs', f));
-      const r = await fetch(`/api/jobs/${job._id}/events`, {
+      const r = await fetch(`/api/jobs/${job._id}/events`, { credentials: 'include',
         method: 'POST', headers: auth(), body: fd
       });
       const d = await r.json().catch(() => ({}));
