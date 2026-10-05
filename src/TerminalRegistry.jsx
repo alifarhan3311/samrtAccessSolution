@@ -30,6 +30,7 @@ export default function TerminalRegistry() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [areaFilter,   setAreaFilter]   = useState('all');
   const [cityFilter,   setCityFilter]   = useState('all');
+  const [addressFilter, setAddressFilter] = useState('all');
 
   // Sorting
   const [sortKey, setSortKey] = useState('terminalId');
@@ -60,7 +61,7 @@ export default function TerminalRegistry() {
   // Reset to page 1 whenever filters change
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, areaFilter, cityFilter, pageSize]);
+  }, [search, statusFilter, areaFilter, cityFilter, addressFilter, pageSize]);
 
   async function updateStatus(t, value) {
     try {
@@ -133,6 +134,11 @@ export default function TerminalRegistry() {
       if (cityFilter !== 'all' && city !== cityFilter) {
         return false;
       }
+      // Address filter
+      const addr = (t.current?.address || t.original?.address || t.official?.address || '').trim().toLowerCase();
+      const isEmptyAddr = !addr || addr === '-' || addr === 'n/a' || addr === 'none' || addr === 'nil';
+      if (addressFilter === 'empty' && !isEmptyAddr) return false;
+      if (addressFilter === 'has_address' && isEmptyAddr) return false;
       // Search filter
       if (search.trim()) {
         const q = search.toLowerCase().trim();
@@ -154,7 +160,7 @@ export default function TerminalRegistry() {
       }
       return true;
     });
-  }, [data.items, statusFilter, areaFilter, cityFilter, search]);
+  }, [data.items, statusFilter, areaFilter, cityFilter, addressFilter, search]);
 
   // Sorting
   const sortedItems = useMemo(() => {
@@ -232,6 +238,7 @@ export default function TerminalRegistry() {
     setStatusFilter('all');
     setAreaFilter('all');
     setCityFilter('all');
+    setAddressFilter('all');
     setPage(1);
   }
 
@@ -354,6 +361,17 @@ export default function TerminalRegistry() {
               {cities.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
+            </select>
+
+            {/* Address Filter */}
+            <select
+              value={addressFilter}
+              onChange={e => setAddressFilter(e.target.value)}
+              title="Filter by Address Presence"
+            >
+              <option value="all">All Addresses</option>
+              <option value="empty">Missing Address</option>
+              <option value="has_address">Has Address</option>
             </select>
 
             {/* Page Size Selector */}
