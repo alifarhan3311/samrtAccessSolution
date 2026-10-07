@@ -303,42 +303,85 @@ export default function RouteSheet() {
                         return (
                           <tr key={job._id}>
                             <td className="rs-dba-cell">
-                              <strong>{job.terminalId} : {bizName}</strong>
-                              <br />
-                              <span style={{ fontSize: '11px', color: '#444' }}>{address} · {city}</span>
+                              {job.isSpareCash ? (
+                                <>
+                                  <strong style={{ color: '#0369a1', fontSize: '14px' }}>💰 {job.businessName}</strong>
+                                  <br />
+                                  <span style={{ fontSize: '11px', color: '#444' }}>{job.address}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <strong>{job.terminalId} : {bizName}</strong>
+                                  <br />
+                                  <span style={{ fontSize: '11px', color: '#444' }}>{address} {city ? `· ${city}` : ''}</span>
+                                </>
+                              )}
                               {(() => {
-                                const noteRaw = (job.events && job.events[0]?.note) || '';
                                 let commentText = '';
+                                const noteRaw = (job.events && job.events[0]?.note) || '';
                                 if (noteRaw.includes(' — ')) {
                                   commentText = noteRaw.split(' — ').slice(1).join(' — ').trim();
                                 } else if (!noteRaw.startsWith('Area route:') && !noteRaw.startsWith('Reassigned') && noteRaw.trim()) {
                                   commentText = noteRaw.trim();
                                 }
-                                return commentText ? (
-                                  <div style={{ marginTop: '6px', background: '#fef3c7', border: '1.5px solid #f59e0b', color: '#92400e', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 800 }}>
-                                    📝 {commentText}
-                                  </div>
-                                ) : null;
+                                const displayNote = job.routeNote !== undefined ? (job.routeNote || '') : commentText;
+
+                                return (
+                                  <>
+                                    <div style={{ marginTop: '6px' }} className="no-print">
+                                      <input 
+                                        type="text"
+                                        placeholder="➕ Add comment..."
+                                        value={displayNote}
+                                        onChange={e => handleInputChange(gIdx, jIdx, 'routeNote', e.target.value)}
+                                        onBlur={e => handleUpdateJob(job._id, 'routeNote', e.target.value)}
+                                        style={{
+                                          width: '100%',
+                                          background: displayNote ? '#fef3c7' : '#f8fafc',
+                                          border: displayNote ? '1.5px solid #f59e0b' : '1px dashed #cbd5e1',
+                                          color: displayNote ? '#92400e' : '#64748b',
+                                          padding: '4px 8px',
+                                          borderRadius: '6px',
+                                          fontSize: '11.5px',
+                                          fontWeight: displayNote ? 800 : 500,
+                                          outline: 'none',
+                                          transition: 'all 0.2s'
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="print-only">
+                                      {displayNote ? <div style={{ marginTop: '4px', fontSize: '11px', fontWeight: 800 }}>📝 {displayNote}</div> : null}
+                                    </div>
+                                  </>
+                                );
                               })()}
                             </td>
-                            <td style={{ textAlign: 'center' }}>{status}</td>
+                            <td style={{ textAlign: 'center' }}>{job.isSpareCash ? '—' : status}</td>
                             <td className="rs-blank-cell p-0">
-                              <input
-                                className="rs-input"
-                                type="number"
-                                value={job.routeBillsRemaining ?? remain ?? ''}
-                                onChange={e => handleInputChange(gIdx, jIdx, 'routeBillsRemaining', e.target.value)}
-                                onBlur={e => handleUpdateJob(job._id, 'routeBillsRemaining', e.target.value)}
-                              />
+                              {job.isSpareCash ? (
+                                <div style={{ textAlign: 'center', color: '#aaa', paddingTop: '12px' }}>—</div>
+                              ) : (
+                                <input
+                                  className="rs-input"
+                                  type="number"
+                                  value={job.routeBillsRemaining ?? remain ?? ''}
+                                  onChange={e => handleInputChange(gIdx, jIdx, 'routeBillsRemaining', e.target.value)}
+                                  onBlur={e => handleUpdateJob(job._id, 'routeBillsRemaining', e.target.value)}
+                                />
+                              )}
                             </td>
                             <td className="rs-blank-cell p-0">
-                              <input
-                                className="rs-input"
-                                type="number"
-                                value={job.routeExistingCash ?? ''}
-                                onChange={e => handleInputChange(gIdx, jIdx, 'routeExistingCash', e.target.value)}
-                                onBlur={e => handleUpdateJob(job._id, 'routeExistingCash', e.target.value)}
-                              />
+                              {job.isSpareCash ? (
+                                <div style={{ textAlign: 'center', color: '#aaa', paddingTop: '12px' }}>—</div>
+                              ) : (
+                                <input
+                                  className="rs-input"
+                                  type="number"
+                                  value={job.routeExistingCash ?? ''}
+                                  onChange={e => handleInputChange(gIdx, jIdx, 'routeExistingCash', e.target.value)}
+                                  onBlur={e => handleUpdateJob(job._id, 'routeExistingCash', e.target.value)}
+                                />
+                              )}
                             </td>
                             <td className="rs-blank-cell p-0">
                               <input

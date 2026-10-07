@@ -6,6 +6,7 @@ const money2=v=>'$'+Number(v||0).toLocaleString();
 const fmt=v=>v?getTorontoDateString(v):'N/A';
 
 import DailyDispatch from './DailyDispatch.jsx';
+import SpareCashModal from './SpareCashModal.jsx';
 
 export default function AreaDispatch({done}){
   const[areas,setAreas]=useState([]);
@@ -22,6 +23,7 @@ export default function AreaDispatch({done}){
   const[loadingTerminals,setLoadingTerminals]=useState(false);
   const[initialLoading,setInitialLoading]=useState(true);
   const[showSingleDispatch, setShowSingleDispatch] = useState(false);
+  const[showSpareCash, setShowSpareCash] = useState(false);
   const[submitting, setSubmitting] = useState(false);
 
   const [ticketModal, setTicketModal] = useState(null);
@@ -182,15 +184,28 @@ export default function AreaDispatch({done}){
           <p className="eyebrow">ROUTE PLANNER</p>
           <h2 style={{margin:'4px 0 0'}}>Assign Location Area Routes</h2>
         </div>
-        <button 
-          onClick={() => setShowSingleDispatch(true)}
-          style={{
-            background:'#f1f3ef', border:'1px solid #dce1dc', color:'#17211f',
-            padding:'8px 16px', borderRadius:'8px', fontWeight:600, fontSize:'13px', cursor:'pointer'
-          }}
-        >
-          ↗ Single ATM dispatch
-        </button>
+        <div style={{display:'flex', gap: '8px'}}>
+          <button 
+            type="button"
+            onClick={() => setShowSpareCash(true)}
+            style={{
+              background:'#f1f3ef', border:'1px solid #dce1dc', color:'#183d36',
+              padding:'8px 16px', borderRadius:'8px', fontWeight:600, fontSize:'13px', cursor:'pointer'
+            }}
+          >
+            💰 Dispatch Extra/Spare Cash
+          </button>
+          <button 
+            type="button"
+            onClick={() => setShowSingleDispatch(true)}
+            style={{
+              background:'#f1f3ef', border:'1px solid #dce1dc', color:'#17211f',
+              padding:'8px 16px', borderRadius:'8px', fontWeight:600, fontSize:'13px', cursor:'pointer'
+            }}
+          >
+            ↗ Single ATM dispatch
+          </button>
+        </div>
       </div>
       <p style={{marginTop:0}}>Select one or multiple operational areas (e.g. North A, West C). All available ATMs in the selected areas become part of the agent's route.</p>
 
@@ -553,5 +568,14 @@ export default function AreaDispatch({done}){
       </div>
     )}
 
+    {showSpareCash && (
+      <SpareCashModal 
+        agents={agents} 
+        onClose={() => setShowSpareCash(false)} 
+        onDispatch={() => {
+          req(`/cash/available?localDate=${getTorontoDateString()}`).then(setBal).catch(()=>{});
+        }}
+      />
+    )}
   </main>;
 }

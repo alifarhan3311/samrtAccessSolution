@@ -48,13 +48,14 @@ const importSchema = new mongoose.Schema({ fileName: String, importedBy: { type:
 const jobEventSchema = new mongoose.Schema({ status: String, note: { type: String, maxlength: 2000 }, cashLoaded: Number, proofFiles: [{ originalName: String, storedName: String, mimeType: String, size: Number, url: String }], createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, createdAt: { type: Date, default: Date.now } }, { _id: true });
 const agentJobSchema = new mongoose.Schema({
   batchId: { type: String, index: true }, locationArea: { type: String, index: true },
-  terminal: { type: mongoose.Schema.Types.ObjectId, ref: 'Terminal', required: true, index: true }, terminalId: { type: String, required: true, index: true },
+  terminal: { type: mongoose.Schema.Types.ObjectId, ref: 'Terminal', index: true }, terminalId: { type: String, index: true },
+  isSpareCash: { type: Boolean, default: false },
   agent: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true }, assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   businessName: String, address: String, city: String, wishAmount: { type: Number, min: 0, default: 0 }, cashToLoad: { type: Number, min: 0, required: true },
   dueAt: { type: Date, required: true, index: true }, status: { type: String, enum: ['assigned', 'accepted', 'travelling', 'cash_loaded', 'issue_reported', 'approved', 'cancelled'], default: 'assigned', index: true },
   events: [jobEventSchema], approvedAt: Date, approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   routeExistingCash: Number, routeCashLoaded: Number, routeLoadTime: String,
-  routeBillsRemaining: Number, routeCashToLoad: Number
+  routeBillsRemaining: Number, routeCashToLoad: Number, routeNote: String
 }, { timestamps: true });
 
 // Cash withdrawn from bank by admin
