@@ -149,6 +149,48 @@ app.get('/api/notifications', auth, async (req, res, next) => {
   } catch (e) { next(e) }
 });
 app.get('/api/terminals', auth, async (req, res, next) => { try { const page = Math.max(1, +req.query.page || 1), limit = Math.min(500, Math.max(1, +req.query.limit || 25)); const q = {}; if (req.query.search) { const s = String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); q.$or = [{ terminalId: new RegExp(s, 'i') }, { 'current.businessName': new RegExp(s, 'i') }, { 'current.city': new RegExp(s, 'i') }, { 'current.address': new RegExp(s, 'i') }]; } if (req.query.status) q['official.status'] = req.query.status; if (req.query.city) q['current.city'] = new RegExp(`^${String(req.query.city).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'); const [items, total] = await Promise.all([Terminal.find(q).sort({ terminalId: 1 }).skip((page - 1) * limit).limit(limit), Terminal.countDocuments(q)]); res.json({ items, total, page, pages: Math.ceil(total / limit) }); } catch (e) { next(e) } });
+app.post('/api/terminals/reconcile-registry', auth, permit('admin', 'manager', 'import'), async (req, res, next) => {
+  try {
+    const rows = z.array(z.record(z.string(), z.any())).min(1).max(1000).parse(req.body.rows);
+    const allowedStatuses = new Map([
+      ['active', 'Active'], ['inactive', 'Inactive'], ['never communicated', 'Never Communicated']
+    ]);
+    const text = value => value == null ? '' : String(value).trim();
+    const number = value => {
+      if (value == null || text(value) === '') return null;
+      const parsed = Number(String(value).replace(/[$,\s]/g, ''));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const operations = [];
+    const counts = { Active: 0, Inactive: 0, 'Never Communicated': 0 };
+    for (const raw of rows) {
+      const terminalId = text(raw['Terminal ID']).toUpperCase();
+      const status = allowedStatuses.get(text(raw.Status).toLowerCase());
+      if (!terminalId || !status) continue;
+      counts[status]++;
+      const withdrawalText = text(raw['Last Withdrawal Date']);
+      const withdrawalAt = withdrawalText && !Number.isNaN(new Date(withdrawalText).getTime()) ? new Date(withdrawalText) : null;
+      operations.push({ updateOne: {
+        filter: { terminalId },
+        update: { $set: {
+          'official.status': status, 'official.tempName': text(raw['Temp Name']),
+          'official.name': text(raw.Name), 'official.address': text(raw.Address),
+          'official.city': text(raw.City), 'official.locationArea': text(raw['Location Area']),
+          'official.wishAmount': number(raw['Wish Amount']), 'official.cashBalance': number(raw['Cash Balance']),
+          'official.cashLoading': number(raw.Cashloading), 'official.agent': text(raw.Agent),
+          'official.notesTask': text(raw['Notes/Task']), 'official.lastCommunication': text(raw['Last Communication']),
+          'official.lastWithdrawalDate': withdrawalText, 'official.lastWithdrawalAt': withdrawalAt,
+          'official.notes': text(raw.Notes), 'official.raw': raw, 'official.sourcePresent': true,
+          'official.lastSyncedAt': new Date(),
+        } },
+        upsert: false,
+      } });
+    }
+    const result = operations.length ? await Terminal.bulkWrite(operations, { ordered: false }) : null;
+    await audit(req, 'TERMINAL_REGISTRY_RECONCILED', 'Terminal', 'terminal-registry-2026-10-07', { rows: operations.length, matched: result?.matchedCount || 0, modified: result?.modifiedCount || 0, counts });
+    res.json({ rows: operations.length, matched: result?.matchedCount || 0, modified: result?.modifiedCount || 0, counts });
+  } catch (e) { next(e) }
+});
 app.get('/api/terminals/:id', auth, async (req, res, next) => { try { const item = await Terminal.findOne({ terminalId: req.params.id.toUpperCase() }).populate('assignmentHistory.assignedBy', 'name email'); if (!item) return res.status(404).json({ message: 'Terminal not found' }); res.json(item); } catch (e) { next(e) } });
 app.patch('/api/terminals/:id', auth, permit('admin', 'manager', 'terminals'), async (req, res, next) => {
   try {
@@ -171,7 +213,7 @@ app.patch('/api/terminals/:id', auth, permit('admin', 'manager', 'terminals'), a
     res.json(t);
   } catch (e) { next(e) }
 });
-app.patch('/api/terminals/:id/status', auth, permit('admin', 'manager', 'terminals'), async (req, res, next) => { try { if (req.user.role === 'agent' && !req.user.canChangeTerminalStatus) return res.status(403).json({ message: 'You do not have permission to modify terminal status' }); const { status } = z.object({ status: z.enum(['Active', 'Inactive', 'Spare', 'Pending', 'Never Communicated']) }).parse(req.body); const t = await Terminal.findOneAndUpdate({ terminalId: req.params.id.toUpperCase() }, { $set: { 'official.status': status } }, { new: true }); if (!t) return res.status(404).json({ message: 'Terminal not found' }); await audit(req, 'TERMINAL_STATUS_CHANGED', 'Terminal', t.id, { terminalId: t.terminalId, status }); res.json(t); } catch (e) { next(e) } });
+app.patch('/api/terminals/:id/status', auth, permit('admin', 'manager', 'terminals'), async (req, res, next) => { try { if (req.user.role === 'agent' && !req.user.canChangeTerminalStatus) return res.status(403).json({ message: 'You do not have permission to modify terminal status' }); const { status } = z.object({ status: z.enum(['Active', 'Inactive', 'Spare', 'Pending', 'Never Communicated']) }).parse(req.body); const t = await Terminal.findOneAndUpdate({ terminalId: req.params.id.toUpperCase() }, { $set: { 'official.status': status, 'official.raw.Status': status } }, { new: true }); if (!t) return res.status(404).json({ message: 'Terminal not found' }); await audit(req, 'TERMINAL_STATUS_CHANGED', 'Terminal', t.id, { terminalId: t.terminalId, status }); res.json(t); } catch (e) { next(e) } });
 app.post('/api/terminals/:id/assign', auth, permit('admin', 'manager', 'assign'), async (req, res, next) => {
   try {
     const b = z.object({ businessName: z.string().min(2).max(150), address: z.string().min(3).max(250), city: z.string().min(2).max(100), locationArea: z.string().max(100).optional(), wishAmount: z.number().nonnegative(), paymentAmount: z.number().nonnegative().optional(), note: z.string().max(1000).optional(), agentId: z.string().optional(), cashToLoad: z.number().nonnegative().optional(), dueAt: z.string().optional() }).parse(req.body);
@@ -254,7 +296,7 @@ app.get('/api/location-areas', auth, async (req, res, next) => {
     const mapped = areas
       .filter(a => !/^(inactive|never communicated)$/i.test(a._id))
       .map(a => ({ name: a._id, terminals: a.terminals, cities: a.cities.filter(Boolean) }));
-    const neverCommCount = await Terminal.countDocuments({ 'official.lastCommunication': 'Never Communicated' });
+    const neverCommCount = await Terminal.countDocuments({ 'official.status': 'Never Communicated' });
     const inactiveCount = await Terminal.countDocuments({ 'official.status': 'Inactive' });
     mapped.push({ name: 'Never Communicated', terminals: neverCommCount, cities: [] });
     mapped.push({ name: 'Inactive', terminals: inactiveCount, cities: [] });
@@ -274,7 +316,7 @@ app.get('/api/location-areas/:area/terminals', auth, async (req, res, next) => {
       conditions.push({ 'official.locationArea': { $in: actualAreas }, 'official.sourcePresent': true });
     }
     if (hasNeverComm) {
-      conditions.push({ 'official.lastCommunication': 'Never Communicated' });
+      conditions.push({ 'official.status': 'Never Communicated' });
     }
     if (hasInactive) {
       conditions.push({ 'official.status': 'Inactive' });
@@ -1260,6 +1302,59 @@ async function connectToMongo(uri, options = {}) {
   }
 }
 
+async function reconcileTerminalsFromStoredImport() {
+  const terminals = await Terminal.find({ 'official.raw.Status': { $exists: true } })
+    .select('_id terminalId official.raw')
+    .lean();
+  const allowed = new Map([
+    ['active', 'Active'],
+    ['inactive', 'Inactive'],
+    ['never communicated', 'Never Communicated'],
+  ]);
+  const operations = [];
+  const counts = { Active: 0, Inactive: 0, 'Never Communicated': 0 };
+  for (const terminal of terminals) {
+    const raw = terminal.official?.raw || {};
+    const text = value => value == null ? '' : String(value).trim();
+    const number = value => {
+      if (value == null || text(value) === '') return null;
+      const parsed = Number(String(value).replace(/[$,\s]/g, ''));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const normalized = allowed.get(text(raw.Status).toLowerCase());
+    if (!normalized) continue;
+    counts[normalized]++;
+    const withdrawalText = text(raw['Last Withdrawal Date']);
+    const withdrawalDate = withdrawalText && !Number.isNaN(new Date(withdrawalText).getTime())
+      ? new Date(withdrawalText)
+      : null;
+    operations.push({
+      updateOne: {
+        filter: { _id: terminal._id },
+        update: { $set: {
+          'official.status': normalized,
+          'official.tempName': text(raw['Temp Name']),
+          'official.name': text(raw.Name),
+          'official.address': text(raw.Address),
+          'official.city': text(raw.City),
+          'official.locationArea': text(raw['Location Area']),
+          'official.wishAmount': number(raw['Wish Amount']),
+          'official.cashBalance': number(raw['Cash Balance']),
+          'official.cashLoading': number(raw.Cashloading),
+          'official.agent': text(raw.Agent),
+          'official.notesTask': text(raw['Notes/Task']),
+          'official.lastCommunication': text(raw['Last Communication']),
+          'official.lastWithdrawalDate': withdrawalText,
+          'official.lastWithdrawalAt': withdrawalDate,
+          'official.notes': text(raw.Notes),
+        } },
+      },
+    });
+  }
+  if (operations.length) await Terminal.bulkWrite(operations, { ordered: false });
+  console.log('Terminal registry reconciliation:', { scanned: terminals.length, updated: operations.length, counts });
+}
+
 async function start() {
   const server = require('http').createServer(app);
   const io = new (require('socket.io').Server)(server, { cors: { origin: process.env.CLIENT_ORIGIN?.split(',') || '*' } });
@@ -1269,6 +1364,7 @@ async function start() {
   server.listen(PORT, '0.0.0.0', () => console.log(`API ready on ${PORT}`));
 
   await connectToMongo(process.env.MONGODB_URI);
+  await reconcileTerminalsFromStoredImport();
   const email = process.env.ADMIN_EMAIL?.toLowerCase();
   if (email && !await User.exists({ email })) await User.create({ name: 'Administrator', email, passwordHash: await bcrypt.hash(process.env.ADMIN_PASSWORD, 12), role: 'admin' });
 }
@@ -1278,6 +1374,7 @@ if (require.main === module) start().catch(e => { console.error(e); process.exit
 async function connectDB() {
   if (mongoose.connection.readyState === 1) return; // already connected
   await connectToMongo(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 8000 });
+  await reconcileTerminalsFromStoredImport();
   const email = process.env.ADMIN_EMAIL?.toLowerCase();
   if (email && !await User.exists({ email })) {
     await User.create({ name: 'Administrator', email, passwordHash: await bcrypt.hash(process.env.ADMIN_PASSWORD, 12), role: 'admin' });

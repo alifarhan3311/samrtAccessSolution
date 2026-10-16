@@ -20,6 +20,15 @@ async function req(path, options = {}) {
 import { getTorontoDateString } from './timezone';
 const show = v => (v === 0 ? 0 : v || '—');
 const fmt  = v => v ? getTorontoDateString(v) : '—';
+const terminalStatus = t => {
+  const raw = String(t?.official?.raw?.Status || '').trim().toLowerCase();
+  if (raw === 'active') return 'Active';
+  if (raw === 'inactive') return 'Inactive';
+  if (raw === 'never communicated') return 'Never Communicated';
+  return ['Active', 'Inactive', 'Never Communicated'].includes(t?.official?.status)
+    ? t.official.status
+    : 'Active';
+};
 
 export default function TerminalRegistry() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -47,11 +56,40 @@ export default function TerminalRegistry() {
   const [exporting, setExporting]= useState(false);
   const [selected, setSelected] = useState(null); // mobile detail modal
 
-  const load = () => {
+  const load = async () => {
     setLoading(true);
-    req('/terminals?limit=500')
-      .then(d => { setData(d); setLoading(false); })
-      .catch(e => { setError(e.message); setLoading(false); });
+    try {
+      const [d, workbookResponse] = await Promise.all([
+        req('/terminals?limit=500'),
+        fetch('/terminal-registry-2026-10-07.xlsx', { cache: 'no-store' })
+      ]);
+      if (!workbookResponse.ok) throw new Error('Authoritative terminal registry workbook could not be loaded');
+      const workbook = XLSX.read(await workbookResponse.arrayBuffer(), { type: 'array', cellDates: true });
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
+      const registry = new Map(rows.map(row => [String(row['Terminal ID'] || '').trim().toUpperCase(), row]));
+      const number = value => value === '' || value == null ? null : Number(String(value).replace(/[$,\s]/g, ''));
+      const items = d.items.map(item => {
+        const row = registry.get(item.terminalId);
+        if (!row) return item;
+        return { ...item, official: { ...item.official,
+          status: String(row.Status || '').trim(), tempName: String(row['Temp Name'] || '').trim(),
+          name: String(row.Name || '').trim(), address: String(row.Address || '').trim(),
+          city: String(row.City || '').trim(), locationArea: String(row['Location Area'] || '').trim(),
+          wishAmount: number(row['Wish Amount']), cashBalance: number(row['Cash Balance']),
+          cashLoading: number(row.Cashloading), agent: String(row.Agent || '').trim(),
+          notesTask: String(row['Notes/Task'] || '').trim(), lastCommunication: String(row['Last Communication'] || '').trim(),
+          lastWithdrawalDate: String(row['Last Withdrawal Date'] || '').trim(), notes: String(row.Notes || '').trim(), raw: row
+        } };
+      });
+      setData({ ...d, items });
+      // Persist the same authoritative rows by Terminal ID; MongoDB _id is never replaced.
+      await req('/terminals/reconcile-registry', { method: 'POST', body: JSON.stringify({ rows }) });
+      setError('');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -74,13 +112,13 @@ export default function TerminalRegistry() {
         ...prev,
         items: prev.items.map(item =>
           item.terminalId === t.terminalId
-            ? { ...item, official: { ...item.official, status: value } }
+            ? { ...item, official: { ...item.official, status: value, raw: { ...(item.official?.raw || {}), Status: value } } }
             : item
         )
       }));
       // refresh selected modal if open
       if (selected?.terminalId === t.terminalId) {
-        setSelected(prev => ({ ...prev, official: { ...prev.official, status: value } }));
+        setSelected(prev => ({ ...prev, official: { ...prev.official, status: value, raw: { ...(prev.official?.raw || {}), Status: value } } }));
       }
     } catch (e) { setError(e.message); }
   }
@@ -93,16 +131,13 @@ export default function TerminalRegistry() {
 
     for (const t of data.items) {
       if (t.official?.locationArea) aSet.add(t.official.locationArea);
-      const city = t.current?.city || t.original?.city || t.official?.city;
+      const city = t.official?.city;
       if (city) cSet.add(city);
 
-      if (t.official?.lastCommunication === 'Never Communicated') {
-        cnt.neverComm++;
-      }
-
-      const st = (t.official?.status || '').toLowerCase();
+      const st = terminalStatus(t).toLowerCase();
       if (st === 'active') cnt.active++;
       else if (st === 'inactive') cnt.inactive++;
+      else if (st === 'never communicated') cnt.neverComm++;
       else if (st === 'spare') cnt.spare++;
       else if (st === 'pending') cnt.pending++;
     }
@@ -120,9 +155,9 @@ export default function TerminalRegistry() {
       // Status filter
       if (statusFilter !== 'all') {
         if (statusFilter === 'NeverCommunicated') {
-          if (t.official?.lastCommunication !== 'Never Communicated') return false;
+          if (terminalStatus(t).toLowerCase() !== 'never communicated') return false;
         } else {
-          if ((t.official?.status || '').toLowerCase() !== statusFilter.toLowerCase()) return false;
+          if (terminalStatus(t).toLowerCase() !== statusFilter.toLowerCase()) return false;
         }
       }
       // Area filter
@@ -130,12 +165,12 @@ export default function TerminalRegistry() {
         return false;
       }
       // City filter
-      const city = t.current?.city || t.original?.city || t.official?.city || '';
+      const city = t.official?.city || '';
       if (cityFilter !== 'all' && city !== cityFilter) {
         return false;
       }
       // Address filter
-      const addr = (t.current?.address || t.original?.address || t.official?.address || '').trim().toLowerCase();
+      const addr = (t.official?.address || '').trim().toLowerCase();
       const isEmptyAddr = !addr || addr === '-' || addr === 'n/a' || addr === 'none' || addr === 'nil';
       if (addressFilter === 'empty' && !isEmptyAddr) return false;
       if (addressFilter === 'has_address' && isEmptyAddr) return false;
@@ -144,8 +179,8 @@ export default function TerminalRegistry() {
         const q = search.toLowerCase().trim();
         const tid = (t.terminalId || '').toLowerCase();
         const temp = (t.official?.tempName || '').toLowerCase();
-        const name = (t.original?.businessName || t.official?.name || '').toLowerCase();
-        const addr = (t.current?.address || t.original?.address || t.official?.address || '').toLowerCase();
+        const name = (t.official?.name || '').toLowerCase();
+        const addr = (t.official?.address || '').toLowerCase();
         const cty  = (city || '').toLowerCase();
         const area = (t.official?.locationArea || '').toLowerCase();
         const ag   = (t.official?.agent || '').toLowerCase();
@@ -169,20 +204,20 @@ export default function TerminalRegistry() {
       let valA, valB;
       switch (sortKey) {
         case 'status':
-          valA = a.official?.status || ''; valB = b.official?.status || ''; break;
+          valA = terminalStatus(a); valB = terminalStatus(b); break;
         case 'terminalId':
           valA = a.terminalId || ''; valB = b.terminalId || ''; break;
         case 'tempName':
           valA = a.official?.tempName || ''; valB = b.official?.tempName || ''; break;
         case 'name':
-          valA = a.original?.businessName || a.official?.name || '';
-          valB = b.original?.businessName || b.official?.name || ''; break;
+          valA = a.official?.name || '';
+          valB = b.official?.name || ''; break;
         case 'address':
-          valA = a.current?.address || a.original?.address || a.official?.address || '';
-          valB = b.current?.address || b.original?.address || b.official?.address || ''; break;
+          valA = a.official?.address || '';
+          valB = b.official?.address || ''; break;
         case 'city':
-          valA = a.current?.city || a.original?.city || a.official?.city || '';
-          valB = b.current?.city || b.original?.city || b.official?.city || ''; break;
+          valA = a.official?.city || '';
+          valB = b.official?.city || ''; break;
         case 'locationArea':
           valA = a.official?.locationArea || ''; valB = b.official?.locationArea || ''; break;
         case 'wishAmount':
@@ -253,12 +288,12 @@ export default function TerminalRegistry() {
       }
       
       const rows = allItems.map(t => ({
-        "Status": t.official?.status || 'Active',
+        "Status": terminalStatus(t),
         "Terminal ID": t.terminalId,
         "Temp Name": t.official?.tempName || '',
-        "Name": t.original?.businessName || t.official?.name || '',
-        "Address": t.current?.address || t.original?.address || t.official?.address || '',
-        "City": t.current?.city || t.original?.city || t.official?.city || '',
+        "Name": t.official?.name || '',
+        "Address": t.official?.address || '',
+        "City": t.official?.city || '',
         "Location Area": t.official?.locationArea || '',
         "Wish Amount": Number(t.official?.wishAmount) || 0,
         "Cash Balance": Number(t.official?.cashBalance) || 0,
@@ -452,14 +487,14 @@ export default function TerminalRegistry() {
                   </tr>
                 ) : (
                   paginatedItems.map(t => {
-                    const currentAddress = t.current?.address || t.original?.address || t.official?.address;
-                    const currentCity    = t.current?.city    || t.original?.city    || t.official?.city;
+                    const currentAddress = t.official?.address;
+                    const currentCity    = t.official?.city;
                     return (
                       <tr key={t.terminalId}>
                         <td>
                           <select
-                            className={`status-select ${t.official?.status?.toLowerCase()}`}
-                            value={['Active', 'Inactive', 'Never Communicated'].includes(t.official?.status) ? t.official?.status : 'Active'}
+                            className={`status-select ${terminalStatus(t).toLowerCase()}`}
+                            value={terminalStatus(t)}
                             onChange={e => updateStatus(t, e.target.value)}
                             disabled={isAgent && !user.canChangeTerminalStatus}
                           >
@@ -470,7 +505,7 @@ export default function TerminalRegistry() {
                         </td>
                         <td><b>{t.terminalId}</b></td>
                         <td>{show(t.official?.tempName)}</td>
-                        <td>{show(t.original?.businessName || t.official?.name)}</td>
+                        <td>{show(t.official?.name)}</td>
                         <td className="wide-cell">{show(currentAddress)}</td>
                         <td>{show(currentCity)}</td>
                         <td>{show(t.official?.locationArea)}</td>
@@ -504,8 +539,8 @@ export default function TerminalRegistry() {
             ) : (
               <div className="tr-card-grid">
                 {paginatedItems.map(t => {
-                  const currentBiz  = t.current?.businessName || t.official?.tempName || t.original?.businessName;
-                  const currentCity = t.current?.city || t.original?.city || t.official?.city;
+                  const currentBiz  = t.official?.tempName || t.official?.name;
+                  const currentCity = t.official?.city;
                   return (
                     <div
                       key={t.terminalId}
@@ -516,8 +551,8 @@ export default function TerminalRegistry() {
                       onKeyDown={e => e.key === 'Enter' && setSelected(t)}
                     >
                       <div className="tr-card-top">
-                        <span className={`tr-card-badge tr-badge-${(t.official?.status || 'active').toLowerCase()}`}>
-                          {t.official?.status || 'Active'}
+                        <span className={`tr-card-badge tr-badge-${terminalStatus(t).toLowerCase()}`}>
+                          {terminalStatus(t)}
                         </span>
                         <b className="tr-card-id">{t.terminalId}</b>
                       </div>
@@ -685,8 +720,8 @@ function TerminalModal({ t, onClose, onStatusChange, isAgent, canChangeStatus, o
   };
 
   const currentBiz     = t.official?.tempName || t.official?.name;
-  const currentAddress = t.current?.address      || t.original?.address  || t.official?.address;
-  const currentCity    = t.current?.city         || t.original?.city     || t.official?.city;
+  const currentAddress = t.official?.address;
+  const currentCity    = t.official?.city;
 
   const editableFields = [
     { key: 'locationArea', label: 'Location Area' },
@@ -710,8 +745,8 @@ function TerminalModal({ t, onClose, onStatusChange, isAgent, canChangeStatus, o
         {/* Header */}
         <div className="tr-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <span className={`tr-card-badge tr-badge-${(t.official?.status || 'active').toLowerCase()}`}>
-              {t.official?.status || 'Active'}
+            <span className={`tr-card-badge tr-badge-${terminalStatus(t).toLowerCase()}`}>
+              {terminalStatus(t)}
             </span>
             <h2 style={{ marginTop: '8px' }}>{t.terminalId}</h2>
             <p className="tr-modal-biz">{show(currentBiz)}</p>
@@ -776,8 +811,8 @@ function TerminalModal({ t, onClose, onStatusChange, isAgent, canChangeStatus, o
           <div className="tr-modal-status" style={{ marginTop: '20px' }}>
             <small>CHANGE STATUS</small>
             <select
-              className={`status-select ${t.official?.status?.toLowerCase()}`}
-              value={['Active', 'Inactive', 'Never Communicated'].includes(t.official?.status) ? t.official?.status : 'Active'}
+              className={`status-select ${terminalStatus(t).toLowerCase()}`}
+              value={terminalStatus(t)}
               onChange={e => onStatusChange(t, e.target.value)}
               disabled={!canChangeStatus}
               style={{ width: '100%', padding: '8px', marginTop: '8px' }}

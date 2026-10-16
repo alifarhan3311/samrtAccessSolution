@@ -5,6 +5,7 @@ const clean  = v => v == null ? '' : String(v).trim();
 const num    = v => { const n = Number(String(v).replace(/[$,\s]/g, '')); return Number.isFinite(n) ? n : undefined; };
 const status = v => {
   const c = clean(v).toLowerCase();
+  if (/^never\s*communicated$/i.test(c)) return 'Never Communicated';
   if (/^inact/i.test(c)) return 'Inactive';
   if (/^act/i.test(c)) return 'Active';
   if (/^spare/i.test(c)) return 'Spare';
@@ -184,10 +185,10 @@ function extractTerminalManagement(row, headers) {
 
 // ── Convert partial official fields to dotted $set paths ─────────────────────
 // e.g. { cashBalance: 500 } → { 'official.cashBalance': 500 }
-function toOfficialSet(fields) {
+function toOfficialSet(fields, includeEmpty = false) {
   const set = {};
   for (const [k, v] of Object.entries(fields)) {
-    if (v !== undefined && v !== '') set[`official.${k}`] = v;
+    if (includeEmpty || (v !== undefined && v !== '')) set[`official.${k}`] = v === undefined ? null : v;
   }
   return set;
 }
@@ -237,7 +238,9 @@ async function importWorkbook(buffer, fileName, userId, io) {
       ? extractTerminalManagement(row, headers)
       : extractCanadaStatus(row, headers);
 
-    const partialSet = toOfficialSet({ ...extracted, raw });
+    // Canada registry imports are authoritative snapshots: blank Excel cells
+    // must also clear old values. Updating by Terminal ID preserves MongoDB _id.
+    const partialSet = toOfficialSet({ ...extracted, raw }, format === 'canada_status');
     const existing = existingMap.get(terminalId);
 
     if (!existing) {

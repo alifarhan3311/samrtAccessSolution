@@ -8,6 +8,7 @@
         "dev:client": "vite --host 0.0.0.0 --port 5321 --strictPort",
         "seed:august": "node server/scripts/seed-august.js",
         "sync:wish-amounts": "node server/scripts/sync-august-wish-amounts.js",
+        "sync:statuses": "node server/scripts/sync-terminal-statuses.js",
         "seed:users": "node server/scripts/seed-demo-users.js",
         "reset:fresh": "node server/scripts/reset-and-reimport.js",
         "build": "vite build",
