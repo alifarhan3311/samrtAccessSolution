@@ -411,8 +411,9 @@ function Dashboard({ go }) {
       <article className="stat" style={{ borderTop: '3px solid #357064' }}><p>Returned by agents</p><strong style={{ color: '#1e5040' }}>{money(today.returned || 0)}</strong><small>Unspent cash back</small></article>
     </div>
 
-    <div className="stats stats-3col" style={{ marginTop: 10 }}>
-      <article className="stat accent"><p>Cash in all machines</p><strong>{money(f.totalCashInMachines || 0)}</strong><small>Live balance across fleet</small></article>
+    <div className="stats" style={{ marginTop: 10 }}>
+      <article className="stat accent"><p>Cash in all machines</p><strong>{money(f.totalCashInMachines || 0)}</strong><small>All 265 machines · every balance included</small></article>
+      <article className="stat" style={{ borderTop: '3px solid #0f766e' }}><p>Operational machines cash</p><strong style={{ color: '#0f766e' }}>{money(f.dispatchableCashInMachines || 0)}</strong><small>Excludes Datastream, East Ottawa, Merchant &amp; Never Communicated</small></article>
       <article className="stat" style={{ borderTop: '3px solid #8b5cf6' }}><p>Net cash out today</p><strong style={{ color: (today.balance || 0) >= 0 ? '#a63e36' : '#267249' }}>{money(Math.abs(today.balance || 0))}</strong><small>{(today.balance || 0) >= 0 ? 'Dispatched exceeds returned' : 'Surplus returned'}</small></article>
       <article className="stat" style={{ borderTop: '3px solid #78909c' }}><p>Open jobs</p><strong>{jobs.open || 0}</strong><small>{jobs.pendingApproval || 0} awaiting approval</small></article>
     </div>

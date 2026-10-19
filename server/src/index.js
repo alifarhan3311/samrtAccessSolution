@@ -54,7 +54,7 @@ app.get('/api/dashboard', auth, async (req, res, next) => {
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
     const [total, active, inactive, inventory, alerts, setupRequired, cities,
-      totalCashInMachines,
+      totalCashInMachines, dispatchableCashInMachines,
       todayWithdrawals, monthWithdrawals,
       todayDispatched, monthDispatched,
       todayActualLoaded, monthActualLoaded,
@@ -71,7 +71,11 @@ app.get('/api/dashboard', auth, async (req, res, next) => {
       Terminal.countDocuments({ 'alert.enabled': true, $expr: { $lte: ['$official.cashBalance', '$alert.threshold'] } }),
       Terminal.countDocuments({ setupRequired: true }),
       Terminal.aggregate([{ $group: { _id: '$official.city', count: { $sum: 1 }, cash: { $sum: '$official.cashBalance' } } }, { $sort: { count: -1 } }, { $limit: 10 }]),
-      // Dashboard machine-cash total excludes non-operational/special groups:
+      // This is the complete fleet total: every machine and every balance.
+      Terminal.aggregate([
+        { $group: { _id: null, total: { $sum: '$official.cashBalance' } } }
+      ]).then(r => r[0]?.total || 0),
+      // Operational/dispatchable cash excludes non-operational/special groups:
       // Datastream, East Ottawa, Never Communicated, and every Merchant area
       // (North Merchant, West Merchant, etc.).
       Terminal.aggregate([
@@ -115,7 +119,7 @@ app.get('/api/dashboard', auth, async (req, res, next) => {
     const vaultAvailable = previousCash + todayWithdrawals.total - todayDispatched.total + todayReturned.total;
 
     res.json({
-      fleet: { total, active, inactive, inventory, alerts, setupRequired, totalCashInMachines },
+      fleet: { total, active, inactive, inventory, alerts, setupRequired, totalCashInMachines, dispatchableCashInMachines },
       cities,
       cash: {
         today: {
