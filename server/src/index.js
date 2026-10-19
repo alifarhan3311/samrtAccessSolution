@@ -71,7 +71,19 @@ app.get('/api/dashboard', auth, async (req, res, next) => {
       Terminal.countDocuments({ 'alert.enabled': true, $expr: { $lte: ['$official.cashBalance', '$alert.threshold'] } }),
       Terminal.countDocuments({ setupRequired: true }),
       Terminal.aggregate([{ $group: { _id: '$official.city', count: { $sum: 1 }, cash: { $sum: '$official.cashBalance' } } }, { $sort: { count: -1 } }, { $limit: 10 }]),
-      Terminal.aggregate([{ $group: { _id: null, total: { $sum: '$official.cashBalance' } } }]).then(r => r[0]?.total || 0),
+      // Dashboard machine-cash total excludes non-operational/special groups:
+      // Datastream, East Ottawa, Never Communicated, and every Merchant area
+      // (North Merchant, West Merchant, etc.).
+      Terminal.aggregate([
+        { $match: {
+          $nor: [
+            { 'official.status': /^never\s*communicated$/i },
+            { 'official.locationArea': /^(datastream|east\s*ottawa)$/i },
+            { 'official.locationArea': /merchant/i },
+          ]
+        } },
+        { $group: { _id: null, total: { $sum: '$official.cashBalance' } } }
+      ]).then(r => r[0]?.total || 0),
       // withdrawals
       CashWithdrawal.aggregate([{ $match: { date: { $gte: today } } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]).then(r => r[0] || { total: 0, count: 0 }),
       CashWithdrawal.aggregate([{ $match: { date: { $gte: monthStart } } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]).then(r => r[0] || { total: 0, count: 0 }),
