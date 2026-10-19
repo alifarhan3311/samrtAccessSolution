@@ -4,6 +4,7 @@ import { getTorontoDateString, isOlderThan3Days } from './timezone';
 const req=async(p,o={})=>{const r=await fetch('/api'+p, { credentials: 'include',...o,headers:{'Content-Type':'application/json',...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 const money2=v=>'$'+Number(v||0).toLocaleString();
 const fmt=v=>v?getTorontoDateString(v):'N/A';
+const isInactiveTerminal=t=>String(t?.official?.status||'').trim().toLowerCase()==='inactive';
 
 import DailyDispatch from './DailyDispatch.jsx';
 import SpareCashModal from './SpareCashModal.jsx';
@@ -76,7 +77,9 @@ export default function AreaDispatch({done}){
       const dateParam=targetDate ? `?date=${encodeURIComponent(targetDate)}` : '';
       const items=await req('/location-areas/'+param+'/terminals'+dateParam);
       setTerminals(items);
-      const activeIds=items.filter(t=>!t.activeJob&&t.official?.status!=='Inactive').map(t=>t.terminalId);
+      // Server excludes inactive machines; this keeps the UI safe if stale
+      // data is returned during a refresh.
+      const activeIds=items.filter(t=>!t.activeJob&&!isInactiveTerminal(t)).map(t=>t.terminalId);
       setSelected(activeIds);
       const defaultCash={};
       const defaultAgents={};
@@ -163,7 +166,13 @@ export default function AreaDispatch({done}){
   const overBudget=available!==null&&total>available;
   const allAssigned=selected.length>0 && selected.every(id => Boolean(agentOverrides[id] || form.agentId));
 
-  const selectableTerminals = terminals.filter(t => !t.activeJob && t.official?.status !== 'Inactive');
+  const selectableTerminals = terminals.filter(t => !t.activeJob && !isInactiveTerminal(t));
+  // Inactive machines have a separate area tab. They are visible only when
+  // that tab alone is opened, never inside a normal area route.
+  const viewingInactiveTab = selectedAreas.length === 1 && selectedAreas[0] === 'Inactive';
+  const visibleTerminals = viewingInactiveTab
+    ? terminals.filter(isInactiveTerminal)
+    : terminals.filter(t => !isInactiveTerminal(t));
   const allSelected = selectableTerminals.length > 0 && selectableTerminals.every(t => selected.includes(t.terminalId));
   const someSelected = selectableTerminals.some(t => selected.includes(t.terminalId));
 
@@ -369,8 +378,8 @@ export default function AreaDispatch({done}){
           </button>
         </div>
 
-        {terminals.map(t=>{
-          const isInactive=t.official?.status==='Inactive';
+        {visibleTerminals.map(t=>{
+          const isInactive=isInactiveTerminal(t);
           const isDisabled=Boolean(t.activeJob||isInactive);
           const isSelected=selected.includes(t.terminalId);
           const currentCad=cashOverrides[t.terminalId]??t.requiredCash??0;

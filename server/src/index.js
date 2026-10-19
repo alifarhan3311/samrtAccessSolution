@@ -289,7 +289,9 @@ app.patch('/api/route-sheet/:jobId/reassign', auth, permit('admin', 'manager'), 
 app.get('/api/location-areas', auth, async (req, res, next) => {
   try {
     const areas = await Terminal.aggregate([
-      { $match: { 'official.sourcePresent': true, 'official.locationArea': { $nin: [null, ''] } } },
+      // Regular route areas must never include inactive machines. They have
+      // their own separate Inactive area/tab below.
+      { $match: { 'official.sourcePresent': true, 'official.locationArea': { $nin: [null, ''] }, 'official.status': { $not: /^inactive$/i } } },
       { $group: { _id: '$official.locationArea', terminals: { $sum: 1 }, cities: { $addToSet: { $ifNull: ['$official.city', '$current.city'] } } } },
       { $sort: { _id: 1 } }
     ]);
@@ -313,7 +315,9 @@ app.get('/api/location-areas/:area/terminals', auth, async (req, res, next) => {
     
     const conditions = [];
     if (actualAreas.length > 0) {
-      conditions.push({ 'official.locationArea': { $in: actualAreas }, 'official.sourcePresent': true });
+      // Do not return inactive ATMs in a normal geographic area. Inactive
+      // terminals are returned only when the user explicitly opens Inactive.
+      conditions.push({ 'official.locationArea': { $in: actualAreas }, 'official.sourcePresent': true, 'official.status': { $not: /^inactive$/i } });
     }
     if (hasNeverComm) {
       conditions.push({ 'official.status': 'Never Communicated' });
