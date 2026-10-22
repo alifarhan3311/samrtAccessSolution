@@ -165,47 +165,10 @@ app.get('/api/notifications', auth, async (req, res, next) => {
   } catch (e) { next(e) }
 });
 app.get('/api/terminals', auth, async (req, res, next) => { try { const page = Math.max(1, +req.query.page || 1), limit = Math.min(500, Math.max(1, +req.query.limit || 25)); const q = {}; if (req.query.search) { const s = String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); q.$or = [{ terminalId: new RegExp(s, 'i') }, { 'current.businessName': new RegExp(s, 'i') }, { 'current.city': new RegExp(s, 'i') }, { 'current.address': new RegExp(s, 'i') }]; } if (req.query.status) q['official.status'] = req.query.status; if (req.query.city) q['current.city'] = new RegExp(`^${String(req.query.city).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'); const [items, total] = await Promise.all([Terminal.find(q).sort({ terminalId: 1 }).skip((page - 1) * limit).limit(limit), Terminal.countDocuments(q)]); res.json({ items, total, page, pages: Math.ceil(total / limit) }); } catch (e) { next(e) } });
-app.post('/api/terminals/reconcile-registry', auth, permit('admin', 'manager', 'import'), async (req, res, next) => {
-  try {
-    const rows = z.array(z.record(z.string(), z.any())).min(1).max(1000).parse(req.body.rows);
-    const allowedStatuses = new Map([
-      ['active', 'Active'], ['inactive', 'Inactive'], ['never communicated', 'Never Communicated']
-    ]);
-    const text = value => value == null ? '' : String(value).trim();
-    const number = value => {
-      if (value == null || text(value) === '') return null;
-      const parsed = Number(String(value).replace(/[$,\s]/g, ''));
-      return Number.isFinite(parsed) ? parsed : null;
-    };
-    const operations = [];
-    const counts = { Active: 0, Inactive: 0, 'Never Communicated': 0 };
-    for (const raw of rows) {
-      const terminalId = text(raw['Terminal ID']).toUpperCase();
-      const status = allowedStatuses.get(text(raw.Status).toLowerCase());
-      if (!terminalId || !status) continue;
-      counts[status]++;
-      const withdrawalText = text(raw['Last Withdrawal Date']);
-      const withdrawalAt = withdrawalText && !Number.isNaN(new Date(withdrawalText).getTime()) ? new Date(withdrawalText) : null;
-      operations.push({ updateOne: {
-        filter: { terminalId },
-        update: { $set: {
-          'official.status': status, 'official.tempName': text(raw['Temp Name']),
-          'official.name': text(raw.Name), 'official.address': text(raw.Address),
-          'official.city': text(raw.City), 'official.locationArea': text(raw['Location Area']),
-          'official.wishAmount': number(raw['Wish Amount']), 'official.cashBalance': number(raw['Cash Balance']),
-          'official.cashLoading': number(raw.Cashloading), 'official.agent': text(raw.Agent),
-          'official.notesTask': text(raw['Notes/Task']), 'official.lastCommunication': text(raw['Last Communication']),
-          'official.lastWithdrawalDate': withdrawalText, 'official.lastWithdrawalAt': withdrawalAt,
-          'official.notes': text(raw.Notes), 'official.raw': raw, 'official.sourcePresent': true,
-          'official.lastSyncedAt': new Date(),
-        } },
-        upsert: false,
-      } });
-    }
-    const result = operations.length ? await Terminal.bulkWrite(operations, { ordered: false }) : null;
-    await audit(req, 'TERMINAL_REGISTRY_RECONCILED', 'Terminal', 'terminal-registry-2026-10-07', { rows: operations.length, matched: result?.matchedCount || 0, modified: result?.modifiedCount || 0, counts });
-    res.json({ rows: operations.length, matched: result?.matchedCount || 0, modified: result?.modifiedCount || 0, counts });
-  } catch (e) { next(e) }
+// Old browser tabs used this endpoint to replay an outdated bundled workbook.
+// Refuse those requests so an old tab can never overwrite a newer import.
+app.post('/api/terminals/reconcile-registry', auth, (req, res) => {
+  res.status(410).json({ message: 'This page is outdated. Refresh the browser to load the latest registry.' });
 });
 app.get('/api/terminals/:id', auth, async (req, res, next) => { try { const item = await Terminal.findOne({ terminalId: req.params.id.toUpperCase() }).populate('assignmentHistory.assignedBy', 'name email'); if (!item) return res.status(404).json({ message: 'Terminal not found' }); res.json(item); } catch (e) { next(e) } });
 app.patch('/api/terminals/:id', auth, permit('admin', 'manager', 'terminals'), async (req, res, next) => {
@@ -1384,7 +1347,6 @@ async function start() {
   server.listen(PORT, '0.0.0.0', () => console.log(`API ready on ${PORT}`));
 
   await connectToMongo(process.env.MONGODB_URI);
-  await reconcileTerminalsFromStoredImport();
   const email = process.env.ADMIN_EMAIL?.toLowerCase();
   if (email && !await User.exists({ email })) await User.create({ name: 'Administrator', email, passwordHash: await bcrypt.hash(process.env.ADMIN_PASSWORD, 12), role: 'admin' });
 }
@@ -1394,7 +1356,6 @@ if (require.main === module) start().catch(e => { console.error(e); process.exit
 async function connectDB() {
   if (mongoose.connection.readyState === 1) return; // already connected
   await connectToMongo(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 8000 });
-  await reconcileTerminalsFromStoredImport();
   const email = process.env.ADMIN_EMAIL?.toLowerCase();
   if (email && !await User.exists({ email })) {
     await User.create({ name: 'Administrator', email, passwordHash: await bcrypt.hash(process.env.ADMIN_PASSWORD, 12), role: 'admin' });

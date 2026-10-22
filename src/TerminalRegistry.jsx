@@ -21,13 +21,8 @@ import { getTorontoDateString } from './timezone';
 const show = v => (v === 0 ? 0 : v || '—');
 const fmt  = v => v ? getTorontoDateString(v) : '—';
 const terminalStatus = t => {
-  const raw = String(t?.official?.raw?.Status || '').trim().toLowerCase();
-  if (raw === 'active') return 'Active';
-  if (raw === 'inactive') return 'Inactive';
-  if (raw === 'never communicated') return 'Never Communicated';
-  return ['Active', 'Inactive', 'Never Communicated'].includes(t?.official?.status)
-    ? t.official.status
-    : 'Active';
+  const status = String(t?.official?.status || '').trim().toLowerCase();
+  return ({ active: 'Active', inactive: 'Inactive', 'never communicated': 'Never Communicated' })[status] || t?.official?.status || 'Unknown';
 };
 
 export default function TerminalRegistry() {
@@ -59,31 +54,8 @@ export default function TerminalRegistry() {
   const load = async () => {
     setLoading(true);
     try {
-      const [d, workbookResponse] = await Promise.all([
-        req('/terminals?limit=500'),
-        fetch('/terminal-registry-2026-10-07.xlsx', { cache: 'no-store' })
-      ]);
-      if (!workbookResponse.ok) throw new Error('Authoritative terminal registry workbook could not be loaded');
-      const workbook = XLSX.read(await workbookResponse.arrayBuffer(), { type: 'array', cellDates: true });
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
-      const registry = new Map(rows.map(row => [String(row['Terminal ID'] || '').trim().toUpperCase(), row]));
-      const number = value => value === '' || value == null ? null : Number(String(value).replace(/[$,\s]/g, ''));
-      const items = d.items.map(item => {
-        const row = registry.get(item.terminalId);
-        if (!row) return item;
-        return { ...item, official: { ...item.official,
-          status: String(row.Status || '').trim(), tempName: String(row['Temp Name'] || '').trim(),
-          name: String(row.Name || '').trim(), address: String(row.Address || '').trim(),
-          city: String(row.City || '').trim(), locationArea: String(row['Location Area'] || '').trim(),
-          wishAmount: number(row['Wish Amount']), cashBalance: number(row['Cash Balance']),
-          cashLoading: number(row.Cashloading), agent: String(row.Agent || '').trim(),
-          notesTask: String(row['Notes/Task'] || '').trim(), lastCommunication: String(row['Last Communication'] || '').trim(),
-          lastWithdrawalDate: String(row['Last Withdrawal Date'] || '').trim(), notes: String(row.Notes || '').trim(), raw: row
-        } };
-      });
-      setData({ ...d, items });
-      // Persist the same authoritative rows by Terminal ID; MongoDB _id is never replaced.
-      await req('/terminals/reconcile-registry', { method: 'POST', body: JSON.stringify({ rows }) });
+      const d = await req('/terminals?limit=500');
+      setData(d);
       setError('');
     } catch (e) {
       setError(e.message);

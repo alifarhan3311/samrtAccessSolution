@@ -2,7 +2,7 @@ const XLSX = require('xlsx');
 const { Terminal, ImportRun, AgentJob, CashDiscrepancy } = require('./models');
 
 const clean  = v => v == null ? '' : String(v).trim();
-const num    = v => { const n = Number(String(v).replace(/[$,\s]/g, '')); return Number.isFinite(n) ? n : undefined; };
+const num    = v => { if (v == null || clean(v) === '') return undefined; const n = Number(String(v).replace(/[$,\s]/g, '')); return Number.isFinite(n) ? n : undefined; };
 const status = v => {
   const c = clean(v).toLowerCase();
   if (/^never\s*communicated$/i.test(c)) return 'Never Communicated';
@@ -105,7 +105,7 @@ function extractCanadaStatus(row, headers) {
 
   const wishAmountVal = num(pick(row, headers, [/wish\s*amount/i, /^wish$/i]));
 
-  return {
+  const result = {
     status:             st,
     tempName:           clean(pick(row, headers, [/temp\s*name/i])),
     name:               clean(pick(row, headers, [/^name$/i, /business/i, /location\s*name/i])),
@@ -125,6 +125,21 @@ function extractCanadaStatus(row, headers) {
     sourcePresent:      true,
     lastSyncedAt:       new Date(),
   };
+  // A status report has only some registry columns. Missing columns must not
+  // overwrite existing status, location, wish amount, or assignment fields.
+  const fields = {
+    status: [/^status$/i], tempName: [/temp\s*name/i], name: [/^name$/i, /business/i, /location\s*name/i],
+    address: [/address/i], city: [/^city$/i], locationArea: [/location\s*area/i],
+    wishAmount: [/wish\s*amount/i, /^wish$/i], cashBalance: [/cash\s*balance/i, /^balance$/i],
+    cashLoading: [/cash\s*loading/i, /cash\s*load/i], agent: [/^agent$/i],
+    notesTask: [/notes?\s*\/\s*task/i, /^task$/i], notes: [/^notes?$/i],
+    lastError: [/last\s*error/i], lastCommunication: [/last\s*comm/i],
+    lastWithdrawalAt: [/last\s*withdrawal/i], lastWithdrawalDate: [/last\s*withdrawal/i]
+  };
+  for (const [key, patterns] of Object.entries(fields)) {
+    if (!headers.some(header => patterns.some(pattern => pattern.test(clean(header))))) delete result[key];
+  }
+  return result;
 }
 
 /**
@@ -425,4 +440,4 @@ async function importWorkbook(buffer, fileName, userId, io) {
   return { runId: run.id, ...totals };
 }
 
-module.exports = { importWorkbook, findHeader };
+module.exports = { importWorkbook, findHeader, extractCanadaStatus, extractTerminalManagement, toOfficialSet };
