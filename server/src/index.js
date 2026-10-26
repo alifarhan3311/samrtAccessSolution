@@ -262,7 +262,45 @@ app.get('/api/jobs/active-terminal/:terminalId', auth, async (req, res, next) =>
   } catch (e) { next(e) }
 });
 app.get('/api/route-sheet', auth, permit('admin', 'manager', 'agent'), async (req, res, next) => { try { const q = { status: { $nin: ['cancelled'] } }; if (req.user.role === 'agent') q.agent = req.user._id; else if (req.query.agentId) q.agent = req.query.agentId; if (req.query.date) { const today = new Date(req.query.date + 'T00:00:00.000Z'); const tomorrow = new Date(today); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); q.dueAt = { $gte: today, $lt: tomorrow }; } const jobs = await AgentJob.find(q).populate('terminal', 'terminalId official.status official.name official.locationArea official.cashBalance official.city official.address current.businessName current.address current.city').lean(); const validJobs = jobs.filter(j => j.terminal || j.isSpareCash); const grouped = {}; for (const job of validJobs) { const area = job.isSpareCash ? 'SPARE CASH' : (job.terminal?.official?.locationArea || 'Unassigned Area'); if (!grouped[area]) grouped[area] = []; grouped[area].push(job); } const sortedGroups = Object.keys(grouped).sort().map(key => ({ area: key, jobs: grouped[key].sort((a, b) => (a.terminalId || '').localeCompare(b.terminalId || '')) })); res.json(sortedGroups); } catch (e) { next(e) } });
-app.patch('/api/route-sheet/:jobId', auth, permit('admin', 'manager', 'agent'), async (req, res, next) => { try { const job = await AgentJob.findById(req.params.jobId); if (!job) return res.status(404).json({ message: 'Job not found' }); if (req.user.role === 'agent' && String(job.agent) !== String(req.user._id)) return res.status(403).json({ message: 'Not authorized to edit this job' }); const b = req.body; if (b.routeExistingCash !== undefined) job.routeExistingCash = b.routeExistingCash === null ? undefined : Number(b.routeExistingCash); if (b.routeCashLoaded !== undefined) job.routeCashLoaded = b.routeCashLoaded === null ? undefined : Number(b.routeCashLoaded); if (b.routeLoadTime !== undefined) job.routeLoadTime = b.routeLoadTime === null ? undefined : String(b.routeLoadTime); if (b.routeBillsRemaining !== undefined) job.routeBillsRemaining = b.routeBillsRemaining === null ? undefined : Number(b.routeBillsRemaining); if (b.routeCashToLoad !== undefined) job.routeCashToLoad = b.routeCashToLoad === null ? undefined : Number(b.routeCashToLoad); if (b.routeNote !== undefined) job.routeNote = b.routeNote === null ? undefined : String(b.routeNote); await job.save(); res.json(job); } catch (e) { next(e) } });
+app.patch('/api/route-sheet/:jobId', auth, permit('admin', 'manager', 'agent'), async (req, res, next) => {
+  try {
+    const job = await AgentJob.findById(req.params.jobId);
+    if (!job) return res.status(404).json({ message: 'Job not found' });
+    if (req.user.role === 'agent' && String(job.agent) !== String(req.user._id)) return res.status(403).json({ message: 'Not authorized to edit this job' });
+
+    const b = req.body || {};
+    const editableFields = ['routeExistingCash', 'routeCashLoaded', 'routeLoadTime', 'routeBillsRemaining', 'routeCashToLoad', 'routeNote', 'discrepancyStatus'];
+    const submittedFields = Object.keys(b).filter(key => editableFields.includes(key));
+    if (!submittedFields.length) return res.status(400).json({ message: 'No editable route-sheet field supplied' });
+    if (req.user.role === 'agent' && submittedFields.some(key => !['routeExistingCash', 'routeCashLoaded'].includes(key))) {
+      return res.status(403).json({ message: 'Agents may update only Existing Cash and Cash Loaded' });
+    }
+    if (submittedFields.includes('discrepancyStatus') && !['admin', 'manager'].includes(req.user.role)) return res.status(403).json({ message: 'Only admin or manager can complete a discrepancy' });
+
+    const before = {};
+    for (const field of submittedFields) before[field] = job[field] ?? null;
+    for (const field of submittedFields) {
+      const value = b[field];
+      if (['routeExistingCash', 'routeCashLoaded', 'routeBillsRemaining', 'routeCashToLoad'].includes(field)) {
+        if (value !== null && (!Number.isFinite(Number(value)) || Number(value) < 0)) return res.status(400).json({ message: `${field} must be a non-negative number` });
+        job[field] = value === null ? undefined : Number(value);
+      } else if (field === 'discrepancyStatus') {
+        if (!['open', 'complete'].includes(value)) return res.status(400).json({ message: 'Invalid discrepancy status' });
+        job[field] = value;
+      } else {
+        job[field] = value === null ? undefined : String(value).slice(0, field === 'routeNote' ? 1000 : 20);
+      }
+    }
+    // Route sheet shows To Be Load as a count of $20 bills. Keep the original
+    // dispatch amount in sync so Area Route Dispatch reflects the same job.
+    if (b.routeCashToLoad !== undefined) {
+      job.cashToLoad = job.routeCashToLoad === undefined ? 0 : job.routeCashToLoad * 20;
+    }
+    await job.save();
+    await audit(req, 'ROUTE_SHEET_UPDATED', 'AgentJob', job.id, { terminalId: job.terminalId, fields: submittedFields, before, after: { ...Object.fromEntries(submittedFields.map(field => [field, job[field] ?? null])), ...(b.routeCashToLoad !== undefined ? { cashToLoad: job.cashToLoad } : {}) } });
+    res.json(job);
+  } catch (e) { next(e) }
+});
 app.delete('/api/route-sheet/:jobId', auth, permit('admin', 'manager'), async (req, res, next) => { try { const job = await AgentJob.findById(req.params.jobId); if (!job) return res.status(404).json({ message: 'Job not found' }); await AgentJob.deleteOne({ _id: job._id }); await audit(req, 'AGENT_JOB_CANCELLED', 'AgentJob', job.id, { terminalId: job.terminalId, agentId: job.agent }); res.json({ message: 'Job cancelled successfully' }); } catch (e) { next(e) } });
 app.patch('/api/route-sheet/:jobId/reassign', auth, permit('admin', 'manager'), async (req, res, next) => { try { const job = await AgentJob.findById(req.params.jobId); if (!job) return res.status(404).json({ message: 'Job not found' }); const agent = await User.findOne({ _id: req.body.agentId, role: 'agent', active: true }); if (!agent) return res.status(400).json({ message: 'Target agent not found or inactive' }); job.agent = agent._id; job.events.push({ status: 'assigned', note: 'Reassigned by admin/manager', createdBy: req.user._id }); await job.save(); await audit(req, 'AGENT_JOB_REASSIGNED', 'AgentJob', job.id, { terminalId: job.terminalId, newAgentId: agent._id, newAgentName: agent.name }); res.json({ message: 'Job reassigned successfully' }); } catch (e) { next(e) } });
 app.get('/api/location-areas', auth, async (req, res, next) => {
@@ -326,9 +364,13 @@ app.get('/api/location-areas/:area/terminals', auth, async (req, res, next) => {
         jobQuery.dueAt = { $gte: start, $lt: end };
       }
     }
-    const active = await AgentJob.find(jobQuery).select('terminalId agent status dueAt').populate('agent', 'name').lean();
+    const active = await AgentJob.find(jobQuery).select('terminalId agent status dueAt cashToLoad routeCashToLoad').populate('agent', 'name').lean();
     const jobs = new Map(active.map(j => [j.terminalId, j]));
-    res.json(terminals.map(t => ({ ...t, current: { ...t.current, city: t.current?.city || t.official?.city || '' }, requiredCash: Math.max(0, (t.official?.wishAmount || 0) - (t.official?.cashBalance || 0)), activeJob: jobs.get(t.terminalId) || null })));
+    res.json(terminals.map(t => {
+      const activeJob = jobs.get(t.terminalId) || null;
+      const requiredCash = activeJob ? Number(activeJob.cashToLoad || 0) : Math.max(0, (t.official?.wishAmount || 0) - (t.official?.cashBalance || 0));
+      return { ...t, current: { ...t.current, city: t.current?.city || t.official?.city || '' }, requiredCash, activeJob };
+    }));
   } catch (e) { next(e) }
 });
 app.post('/api/jobs/dispatch', auth, permit('admin', 'manager', 'dispatch'), async (req, res, next) => {
@@ -457,11 +499,14 @@ app.get('/api/cash/agent-audit', auth, permit('admin', 'manager', 'ledger'), asy
 
     jobs.forEach(j => {
       totalDispatched += (j.cashToLoad || 0);
-      if (j.status === 'approved') {
+      const routeLoaded = Number.isFinite(Number(j.routeCashLoaded)) ? Number(j.routeCashLoaded) : null;
+      const loadEvent = [...j.events].reverse().find(e => e.status === 'cash_loaded');
+      const actualLoaded = routeLoaded ?? Number(loadEvent?.cashLoaded ?? (j.status === 'approved' ? j.cashToLoad : 0));
+      j._actualLoaded = actualLoaded;
+      j._discrepancy = Math.max(0, Number(j.cashToLoad || 0) - actualLoaded);
+      if (j.status === 'approved' || actualLoaded > 0) {
         jobsApprovedCount++;
-        // Find the cash_loaded event for actual loaded amount
-        const loadEvent = [...j.events].reverse().find(e => e.status === 'cash_loaded');
-        totalLoaded += Number(loadEvent?.cashLoaded ?? j.cashToLoad ?? 0);
+        totalLoaded += actualLoaded;
       }
     });
 
@@ -477,7 +522,8 @@ app.get('/api/cash/agent-audit', auth, permit('admin', 'manager', 'ledger'), asy
         totalLoaded,
         totalReturned,
         netCashOut,
-        unaccounted
+        unaccounted,
+        discrepancyJobs: jobs.filter(j => j._discrepancy > 0).length
       },
       jobs,
       returns

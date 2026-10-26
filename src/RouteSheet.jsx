@@ -23,11 +23,13 @@ const fmtDate = d => {
 export default function RouteSheet() {
   const [agents, setAgents] = useState([]);
 
-  const token = localStorage.getItem('token');
-  const user = token ? JSON.parse(atob(token.split('.')[1])) : null;
+  // Use the current profile saved at login. The JWT payload is intentionally
+  // minimal and does not always contain the same fields as the profile.
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
   const isAgent = user?.role === 'agent';
+  const canEditRouteField = field => !isAgent || ['routeExistingCash', 'routeCashLoaded'].includes(field);
 
-  const [agentId, setAgentId] = useState(isAgent ? (user.sub || user.id || user._id) : '');
+  const [agentId, setAgentId] = useState(isAgent ? (user?.id || user?._id) : '');
   const [date, setDate] = useState(() => getTorontoDateString());
 
   const [groups, setGroups] = useState([]);
@@ -56,7 +58,7 @@ export default function RouteSheet() {
   }, [isAgent]);
 
   const loadData = () => {
-    const targetAgent = isAgent ? (user.sub || user.id || user._id) : agentId;
+    const targetAgent = isAgent ? (user?.id || user?._id) : agentId;
     if (!targetAgent) {
       setGroups([]);
       setTickets([]);
@@ -127,7 +129,7 @@ export default function RouteSheet() {
   const addReturn = async (e) => {
     e.preventDefault();
     const amount = Number(rForm.amount);
-    const targetAgent = isAgent ? (user.sub || user.id || user._id) : agentId;
+    const targetAgent = isAgent ? (user?.id || user?._id) : agentId;
     if (!targetAgent) { setRMsg({ text: 'Select an agent first.', ok: false }); return; }
     if (!amount || amount < 0) { setRMsg({ text: 'Enter a valid amount.', ok: false }); return; }
     setRSaving(true); setRMsg({ text: '', ok: false });
@@ -191,10 +193,14 @@ export default function RouteSheet() {
 
   let totalRemaining = 0;
   let totalToLoad = 0;
+  let totalExistingCash = 0;
+  let totalCashLoaded = 0;
   groups.forEach(g => {
     g.jobs.forEach(j => {
       totalRemaining += Math.floor((j.terminal?.official?.cashBalance || 0) / 20);
       totalToLoad += Math.floor((j.cashToLoad || 0) / 20);
+      totalExistingCash += Number(j.routeExistingCash) || 0;
+      totalCashLoaded += Number(j.routeCashLoaded) || 0;
     });
   });
 
@@ -333,6 +339,7 @@ export default function RouteSheet() {
                                         type="text"
                                         placeholder="➕ Add comment..."
                                         value={displayNote}
+                                        disabled={!canEditRouteField('routeNote')}
                                         onChange={e => handleInputChange(gIdx, jIdx, 'routeNote', e.target.value)}
                                         onBlur={e => handleUpdateJob(job._id, 'routeNote', e.target.value)}
                                         style={{
@@ -365,6 +372,7 @@ export default function RouteSheet() {
                                   className="rs-input"
                                   type="number"
                                   value={job.routeBillsRemaining ?? remain ?? ''}
+                                  disabled={!canEditRouteField('routeBillsRemaining')}
                                   onChange={e => handleInputChange(gIdx, jIdx, 'routeBillsRemaining', e.target.value)}
                                   onBlur={e => handleUpdateJob(job._id, 'routeBillsRemaining', e.target.value)}
                                 />
@@ -378,6 +386,7 @@ export default function RouteSheet() {
                                   className="rs-input"
                                   type="number"
                                   value={job.routeExistingCash ?? ''}
+                                  disabled={!canEditRouteField('routeExistingCash')}
                                   onChange={e => handleInputChange(gIdx, jIdx, 'routeExistingCash', e.target.value)}
                                   onBlur={e => handleUpdateJob(job._id, 'routeExistingCash', e.target.value)}
                                 />
@@ -388,6 +397,7 @@ export default function RouteSheet() {
                                 className="rs-input"
                                 type="number"
                                 value={job.routeCashToLoad ?? load ?? ''}
+                                disabled={!canEditRouteField('routeCashToLoad')}
                                 onChange={e => handleInputChange(gIdx, jIdx, 'routeCashToLoad', e.target.value)}
                                 onBlur={e => handleUpdateJob(job._id, 'routeCashToLoad', e.target.value)}
                               />
@@ -397,6 +407,7 @@ export default function RouteSheet() {
                                 className="rs-input"
                                 type="number"
                                 value={job.routeCashLoaded ?? ''}
+                                disabled={!canEditRouteField('routeCashLoaded')}
                                 onChange={e => handleInputChange(gIdx, jIdx, 'routeCashLoaded', e.target.value)}
                                 onBlur={e => handleUpdateJob(job._id, 'routeCashLoaded', e.target.value)}
                               />
@@ -407,12 +418,14 @@ export default function RouteSheet() {
                                 type="text"
                                 placeholder="HH:MM"
                                 value={job.routeLoadTime ?? ''}
+                                disabled={!canEditRouteField('routeLoadTime')}
                                 onChange={e => handleInputChange(gIdx, jIdx, 'routeLoadTime', e.target.value)}
                                 onBlur={e => handleUpdateJob(job._id, 'routeLoadTime', e.target.value)}
                               />
                             </td>
                             <td className="no-print" style={{ textAlign: 'center' }}>
-                              {reassigningId === job._id ? (
+                              {!isAgent && (
+                              reassigningId === job._id ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                   <select
                                     value={newAgentId}
@@ -432,7 +445,7 @@ export default function RouteSheet() {
                                   <button onClick={() => setReassigningId(job._id)} title="Reassign Agent" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}>🔄</button>
                                   <button onClick={() => cancelJob(job._id)} title="Cancel Job" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#dc2626' }}>❌</button>
                                 </div>
-                              )}
+                              ))}
                             </td>
                           </tr>
                         );
@@ -444,11 +457,12 @@ export default function RouteSheet() {
                     <td className="rs-blank-cell p-0" style={{ textAlign: 'center', fontWeight: 800, padding: '8px' }}>
                       {groups.reduce((sum, g) => sum + g.jobs.reduce((s, job) => s + Number(job.routeBillsRemaining ?? Math.floor((job.terminal?.official?.cashBalance || 0) / 20) ?? 0), 0), 0)}
                     </td>
-                    <td className="rs-blank-cell"></td>
+                    <td className="rs-blank-cell p-0" style={{ textAlign: 'center', fontWeight: 800, padding: '8px' }}>{totalExistingCash}</td>
                     <td className="rs-blank-cell p-0" style={{ textAlign: 'center', fontWeight: 800, padding: '8px' }}>
                       {groups.reduce((sum, g) => sum + g.jobs.reduce((s, job) => s + Number(job.routeCashToLoad ?? Math.floor((job.cashToLoad || 0) / 20) ?? 0), 0), 0)}
                     </td>
-                    <td className="rs-blank-cell" colSpan="3"></td>
+                    <td className="rs-blank-cell p-0" style={{ textAlign: 'center', fontWeight: 800, padding: '8px' }}>{totalCashLoaded}</td>
+                    <td className="rs-blank-cell" colSpan="2"></td>
                   </tr>
                 </tbody>
               </table>

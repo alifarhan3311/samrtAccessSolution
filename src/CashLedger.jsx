@@ -37,6 +37,7 @@ export default function CashLedger(){
   const[auditAgentId, setAuditAgentId] = useState('');
   const[auditData, setAuditData] = useState(null);
   const[auditLoading, setAuditLoading] = useState(false);
+  const[auditStatus, setAuditStatus] = useState('all');
 
   // load agents once
   useEffect(()=>{req('/users/agents').then(setAgents).catch(()=>{})},[]);
@@ -92,6 +93,31 @@ export default function CashLedger(){
     try{await req(`/cash/${type}/${id}`,{method:'DELETE'});loadAll();}
     catch(e){alert(e.message);}
   }
+
+  const actualLoaded = j => Number.isFinite(Number(j.routeCashLoaded))
+    ? Number(j.routeCashLoaded)
+    : Number([...j.events].reverse().find(e=>e.status==='cash_loaded')?.cashLoaded ?? (j.status==='approved'?j.cashToLoad:0));
+  const updateJobLoaded = async (job, value) => {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 0) return;
+    try {
+      await req(`/route-sheet/${job._id}`, { method:'PATCH', body:JSON.stringify({ routeCashLoaded: amount }) });
+      setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(j => j._id===job._id ? {...j, routeCashLoaded: amount} : j)} : prev);
+    } catch (e) { alert(e.message); }
+  };
+  const deleteJob = async job => {
+    if (!confirm(`Delete dispatch record for ${job.terminalId}? This cannot be undone.`)) return;
+    try {
+      await req(`/route-sheet/${job._id}`, { method:'DELETE' });
+      setAuditData(prev => prev ? {...prev, jobs: prev.jobs.filter(j=>j._id!==job._id)} : prev);
+    } catch (e) { alert(e.message); }
+  };
+  const updateDiscrepancyStatus = async (job, value) => {
+    try {
+      await req(`/route-sheet/${job._id}`, { method:'PATCH', body:JSON.stringify({ discrepancyStatus:value }) });
+      setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(j=>j._id===job._id ? {...j, discrepancyStatus:value} : j)} : prev);
+    } catch (e) { alert(e.message); }
+  };
 
   return <div className="ledger-page">
 
@@ -232,18 +258,31 @@ export default function CashLedger(){
 
     {/* ── AGENT AUDIT TAB ── */}
     {tab==='agent-audit'&&<div className="ledger-card" style={{marginTop:16}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:20}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:18,flexWrap:'wrap',marginBottom:20}}>
         <div>
           <p className="eyebrow">AGENT PERFORMANCE AUDIT</p>
-          <h3>Detailed agent history</h3>
+          <h3>Cash dispatch activities</h3>
         </div>
-        <label style={{display:'flex',flexDirection:'column',gap:4,fontSize:12,fontWeight:700}}>
-          Select Agent
-          <select value={auditAgentId} onChange={e=>setAuditAgentId(e.target.value)} style={{padding:8,borderRadius:6,border:'1px solid #ccc'}}>
-            <option value="">Choose...</option>
-            {agents.map(a=><option key={a._id} value={a._id}>{a.name}</option>)}
-          </select>
-        </label>
+        <div style={{display:'flex',alignItems:'flex-end',gap:10,flexWrap:'wrap'}}>
+          <label style={{display:'flex',flexDirection:'column',gap:4,fontSize:12,fontWeight:700}}>From
+            <input type="date" value={dateRange.from} onChange={e=>setDateRange(p=>({...p,from:e.target.value}))} style={{padding:8,borderRadius:6,border:'1px solid #ccc'}} />
+          </label>
+          <label style={{display:'flex',flexDirection:'column',gap:4,fontSize:12,fontWeight:700}}>To
+            <input type="date" value={dateRange.to} onChange={e=>setDateRange(p=>({...p,to:e.target.value}))} style={{padding:8,borderRadius:6,border:'1px solid #ccc'}} />
+          </label>
+          <label style={{display:'flex',flexDirection:'column',gap:4,fontSize:12,fontWeight:700}}>Agent
+            <select value={auditAgentId} onChange={e=>setAuditAgentId(e.target.value)} style={{padding:8,borderRadius:6,border:'1px solid #ccc'}}>
+              <option value="">Choose...</option>
+              {agents.map(a=><option key={a._id} value={a._id}>{a.name}</option>)}
+            </select>
+          </label>
+          <label style={{display:'flex',flexDirection:'column',gap:4,fontSize:12,fontWeight:700}}>Status
+            <select value={auditStatus} onChange={e=>setAuditStatus(e.target.value)} style={{padding:8,borderRadius:6,border:'1px solid #ccc'}}>
+              <option value="all">All statuses</option><option value="discrepancy">Discrepancy</option>
+              {['assigned','accepted','travelling','cash_loaded','issue_reported','approved','cancelled'].map(s=><option key={s} value={s}>{s.replace('_',' ')}</option>)}
+            </select>
+          </label>
+        </div>
       </div>
 
       {!auditAgentId && <p className="muted" style={{textAlign:'center',padding:'40px 0'}}>Please select an agent to view their audit.</p>}
@@ -274,23 +313,28 @@ export default function CashLedger(){
           </div>
         </div>
 
-        <div className="ledger-split">
+        <div className="ledger-audit-records">
           <div className="ledger-card" style={{border:'1px solid #eee'}}>
             <p className="eyebrow">JOBS RECORD</p>
             <h3>Assigned ATMs</h3>
-            {auditData.jobs.length===0 ? <p className="muted">No jobs in this period.</p> :
+            {(() => { const jobs = auditData.jobs.filter(j => auditStatus==='all' || (auditStatus==='discrepancy' ? (Number(j.cashToLoad||0)-actualLoaded(j)>0) : j.status===auditStatus)); return jobs.length===0 ? <p className="muted">No matching dispatch records.</p> :
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Date</th><th>Terminal</th><th>Status</th><th>Given</th><th>Loaded</th></tr></thead>
-                <tbody>{auditData.jobs.map(j=><tr key={j._id}>
+                <thead><tr><th>Date</th><th>Terminal</th><th>Job status</th><th>To be load</th><th>Cash loaded</th><th>Difference</th><th>Discrepancy status</th><th></th></tr></thead>
+                <tbody>{jobs.map(j=>{
+                  const loaded=actualLoaded(j); const difference=Math.max(0,Number(j.cashToLoad||0)-loaded);
+                  return <tr key={j._id}>
                   <td style={{whiteSpace:'nowrap'}}>{fmt(j.createdAt)}</td>
                   <td><b>{j.terminalId}</b><br/><span style={{fontSize:11}}>{j.businessName}</span></td>
                   <td><span className={'badge badge-'+j.status.replace('_','-')} style={{fontSize:10}}>{j.status.replace('_',' ')}</span></td>
                   <td>{money(j.cashToLoad)}</td>
-                  <td><b style={{color:'#183d36'}}>{money([...j.events].reverse().find(e=>e.status==='cash_loaded')?.cashLoaded ?? (j.status==='approved'?j.cashToLoad:0))}</b></td>
-                </tr>)}</tbody>
+                  <td><input type="number" min="0" defaultValue={loaded} onBlur={e=>updateJobLoaded(j,e.target.value)} style={{width:90}} /></td>
+                  <td><b style={{color:difference?'#b42318':'#267249'}}>{money(difference)}</b></td>
+                  <td><select value={j.discrepancyStatus || (difference ? 'open' : 'complete')} onChange={e=>updateDiscrepancyStatus(j,e.target.value)} style={{padding:'5px 7px',borderRadius:6,border:'1px solid #ccc'}}><option value="open">Open</option><option value="complete">Complete</option></select></td>
+                  <td><button className="del-btn" title="Delete" onClick={()=>deleteJob(j)}>&#10005;</button></td>
+                </tr>})}</tbody>
               </table>
-            </div>}
+            </div>})()}
           </div>
 
           <div className="ledger-card" style={{border:'1px solid #eee'}}>

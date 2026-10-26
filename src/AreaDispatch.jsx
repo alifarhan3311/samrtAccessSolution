@@ -415,6 +415,7 @@ export default function AreaDispatch({done}){
             ) : t.activeJob ? (
               <div style={{gridColumn: 'span 3', textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
                 <strong style={{color:'#999'}}>Assigned: {t.activeJob.agent?.name}</strong>
+                <small style={{color:'#64748b', fontSize:'10px', marginTop:'2px'}}>Planned load: {Math.floor((t.activeJob.cashToLoad || 0) / 20)} bills = {money2(t.activeJob.cashToLoad || 0)}</small>
                 {t.activeJob.dueAt && <small style={{color:'#a5b0aa', fontSize: '10px', marginTop: '2px'}}>Due: {getTorontoDateString(t.activeJob.dueAt)}</small>}
               </div>
             ) : (

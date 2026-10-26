@@ -194,6 +194,35 @@ function Shell() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Permissions are managed by the admin and can change while an agent is
+  // signed in. Refresh the account profile on page load instead of trusting
+  // the older allowedTabs snapshot in localStorage.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    fetch('/api/me', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(profile => {
+        if (cancelled) return;
+        setUser(current => {
+          if (!current) return current;
+          const refreshed = {
+            ...current,
+            id: profile._id || profile.id || current.id,
+            name: profile.name || current.name,
+            email: profile.email || current.email,
+            role: profile.role || current.role,
+            allowedTabs: Array.isArray(profile.allowedTabs) ? profile.allowedTabs : current.allowedTabs,
+            canChangeTerminalStatus: Boolean(profile.canChangeTerminalStatus)
+          };
+          localStorage.setItem('user', JSON.stringify(refreshed));
+          return refreshed;
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.id, user?._id]);
+
   useEffect(() => {
     if (!user) return;
     const socket = io('/', {

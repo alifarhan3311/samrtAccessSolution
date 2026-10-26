@@ -19,6 +19,9 @@
 .lstat.purple{border-top:3px solid #8b5cf6}.lstat.purple strong{color:#6d28d9}
 .ledger-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
 .ledger-split{display:grid;grid-template-columns:1fr 1.6fr;gap:14px}
+.ledger-audit-records{display:flex;flex-direction:column;gap:14px;width:100%}
+.ledger-audit-records>.ledger-card{width:100%;box-sizing:border-box}
+.ledger-audit-records .table-wrap{overflow-x:auto}
 .ledger-card{background:#fff;border:1px solid #e0e4df;border-radius:12px;padding:22px}
 .ledger-card h3{font:700 19px Manrope;margin:4px 0 16px}
 .ledger-card table{width:100%;border-collapse:collapse;font-size:13px}
