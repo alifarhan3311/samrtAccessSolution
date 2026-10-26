@@ -1207,6 +1207,33 @@ app.post('/api/atm/upload-form', auth, permit('admin', 'agent', 'atm'), proofUpl
     });
   } catch (e) { next(e); }
 });
+// Cloudinary raw PDF uploads may be served as application/octet-stream. Proxy
+// stored form documents with their actual content type so browsers can view them.
+app.get('/api/atm/form/:type/:id/document', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
+  try {
+    const models = { AtmInstallation, AtmAgreement, AtmRemoval, AtmSetup };
+    const Model = models[req.params.type];
+    if (!Model || !mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid form record' });
+    const record = await Model.findById(req.params.id).lean();
+    if (!record) return res.status(404).json({ message: 'Form not found' });
+    const url = record.documentFile?.url || record.documentUrl;
+    if (!url) return res.status(404).json({ message: 'This form has no uploaded document' });
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' || parsed.hostname !== 'res.cloudinary.com') return res.status(400).json({ message: 'Unsupported document location' });
+    const upstream = await fetch(parsed, { redirect: 'error', signal: AbortSignal.timeout(15000) });
+    if (!upstream.ok) return res.status(502).json({ message: 'Unable to retrieve the uploaded document' });
+    const bytes = Buffer.from(await upstream.arrayBuffer());
+    if (bytes.length > 8 * 1024 * 1024) return res.status(413).json({ message: 'Document is too large' });
+    const mime = bytes.subarray(0, 5).toString('ascii') === '%PDF-' ? 'application/pdf' : record.documentFile?.mimeType;
+    if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(mime)) return res.status(415).json({ message: 'Unsupported document type' });
+    const name = (record.documentFile?.originalName || 'atm-form').replace(/[^a-zA-Z0-9._-]/g, '_');
+    res.set('Content-Type', mime);
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Content-Disposition', `${req.query.download === '1' ? 'attachment' : 'inline'}; filename="${name}"`);
+    res.send(bytes);
+  } catch (e) { next(e); }
+});
+
 app.get('/api/atm/timeline', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
   try {
     const [installations, agreements, removals, setups] = await Promise.all([

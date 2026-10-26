@@ -9,7 +9,7 @@ import './atm-forms.css';
 export default function AtmForms() {
   const [activeModal, setActiveModal] = useState(null);
   const [viewingForm, setViewingForm] = useState(null);
-  const [previewImageUrl, setPreviewImageUrl] = useState(null);
+  const [previewDocument, setPreviewDocument] = useState(null);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = user.role === 'admin';
@@ -32,6 +32,7 @@ export default function AtmForms() {
   const fileInputRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
+  const [selectedFileUrl, setSelectedFileUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState({ text: '', type: '' });
   const [uploadForm, setUploadForm] = useState({
@@ -41,6 +42,13 @@ export default function AtmForms() {
     locationName: '',
     remarks: ''
   });
+
+  useEffect(() => {
+    if (!selectedFile) { setSelectedFileUrl(null); return; }
+    const url = URL.createObjectURL(selectedFile);
+    setSelectedFileUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [selectedFile]);
 
   useEffect(() => {
     fetchTimelineFor('');
@@ -176,11 +184,7 @@ export default function AtmForms() {
 
     const handleViewForm = () => {
       if (hasDoc) {
-        if (isImage) {
-          setPreviewImageUrl(docUrl);
-        } else {
-          window.open(docUrl, '_blank');
-        }
+        setPreviewDocument({ url: `/api/atm/form/${encodeURIComponent(event.type)}/${encodeURIComponent(event.data._id)}/document`, isImage });
       } else {
         setViewingForm(event.data);
         if (event.title === 'ATM Installation') setActiveModal('installation');
@@ -202,7 +206,7 @@ export default function AtmForms() {
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="timeline-date">
+              <span className="timeline-date" title="Form execution date">
                 {getTorontoDateTime(event.date).replace('T', ' ')}
               </span>
               
@@ -247,7 +251,8 @@ export default function AtmForms() {
             {event.data.customerName && <p><strong>Customer / Owner:</strong> {event.data.customerName}</p>}
             {event.data.reasonForRemoval && <p><strong>Reason for Removal:</strong> {event.data.reasonForRemoval}</p>}
             {event.data.remarks && <p><strong>Remarks / Notes:</strong> {event.data.remarks}</p>}
-            <p className="timeline-author">Created / Uploaded By: {event.data.createdBy?.name || 'System'}</p>
+            <p className="timeline-author">{hasDoc ? 'Uploaded by' : 'Created by'}: {event.data.createdBy?.name || 'Unknown'}</p>
+            <p className="timeline-author">{hasDoc ? 'Uploaded' : 'Created'}: {event.data.createdAt ? getTorontoDateTime(event.data.createdAt).replace('T', ' ') : 'Date unavailable'}</p>
           </div>
         </div>
       </div>
@@ -404,6 +409,10 @@ export default function AtmForms() {
                     <div className="atm-file-info">
                       <strong>{selectedFile.name}</strong>
                       <small>{(selectedFile.size / 1024).toFixed(1)} KB</small>
+                      <button type="button" className="atm-selected-preview-btn" disabled={!selectedFileUrl} onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewDocument({ url: selectedFileUrl, isImage: selectedFile.type.startsWith('image/') });
+                      }}>View preview</button>
                     </div>
                     <button 
                       type="button" 
@@ -563,12 +572,12 @@ export default function AtmForms() {
         </div>
       </div>
 
-      {/* Image Preview Lightbox Modal */}
-      {previewImageUrl && (
-        <div className="atm-modal-overlay" onClick={() => setPreviewImageUrl(null)}>
+      {/* Uploaded image or PDF preview */}
+      {previewDocument && (
+        <div className="atm-modal-overlay" onClick={() => setPreviewDocument(null)}>
           <div className="atm-image-lightbox" onClick={e => e.stopPropagation()}>
-            <button className="atm-lightbox-close" onClick={() => setPreviewImageUrl(null)}>✕ Close</button>
-            <img src={previewImageUrl} alt="Full Form Scan" />
+            <button type="button" className="atm-preview-close" aria-label="Close form preview" title="Close preview" onClick={() => setPreviewDocument(null)}>×</button>
+            {previewDocument.isImage ? <img src={previewDocument.url} alt="Full Form Scan" /> : <iframe className="atm-pdf-preview" src={previewDocument.url} title="Form PDF preview" />}
           </div>
         </div>
       )}

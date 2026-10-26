@@ -579,6 +579,37 @@
   border-radius: 6px;
 }
 
+.atm-pdf-preview {
+  width: min(80vw, 1000px);
+  height: 78vh;
+  border: 0;
+}
+
+.atm-selected-preview-btn {
+  margin-top: 6px;
+  padding: 4px 9px;
+  border: 1px solid #a6cbbd;
+  border-radius: 6px;
+  background: #fff;
+  color: #17443b;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.atm-preview-close {
+  align-self: flex-end;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 8px;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #17443b;
+  font-size: 25px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .atm-lightbox-close {
   align-self: flex-end;
   margin-bottom: 8px;
