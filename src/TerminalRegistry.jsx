@@ -441,12 +441,8 @@ export default function TerminalRegistry() {
                   <Th colKey="locationArea"       label="Location Area" />
                   <Th colKey="wishAmount"         label="Wish Amount" />
                   <Th colKey="cashBalance"        label="Cash Balance" />
-                  <Th colKey="cashLoading"        label="Cashloading" />
-                  <Th colKey="agent"              label="Agent" />
-                  <Th colKey="notesTask"          label="Notes/Task" />
                   <Th colKey="lastCommunication"  label="Last Communication" />
                   <Th colKey="lastWithdrawalDate" label="Last Withdrawal Date" />
-                  <Th colKey="notes"              label="Notes" />
                   <th>Action</th>
                 </tr>
               </thead>
@@ -483,12 +479,8 @@ export default function TerminalRegistry() {
                         <td>{show(t.official?.locationArea)}</td>
                         <td><b>{money(t.official?.wishAmount)}</b></td>
                         <td><b>{money(t.official?.cashBalance)}</b></td>
-                        <td>{show(t.official?.cashLoading)}</td>
-                        <td>{show(t.official?.agent)}</td>
-                        <td className="wide-cell">{show(t.official?.notesTask)}</td>
                         <td>{show(t.official?.lastCommunication)}</td>
                         <td>{show(t.official?.lastWithdrawalDate || fmt(t.official?.lastWithdrawalAt))}</td>
-                        <td>{show(t.official?.notes)}</td>
                         <td>
                           <button className="link" onClick={() => setSelected(t)}>
                             View Details ➔

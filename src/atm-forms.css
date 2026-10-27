@@ -761,46 +761,47 @@
 
 /* ── Form Sheet ── */
 .atm-form-body {
-  padding: 28px;
+  padding: 18px;
+  background: #fff;
 }
 
 .sheet-title {
-  font: 800 18px Manrope;
-  color: #17211f;
+  font: 900 18px Arial, sans-serif;
+  color: #000;
   text-align: center;
-  padding: 16px;
-  background: #f1f3ef;
-  border: 1px solid #dce1dc;
-  border-radius: 10px 10px 0 0;
-  letter-spacing: 0.3px;
+  padding: 8px;
+  background: #e6e6e6;
+  border: 2px solid #000;
+  border-radius: 0;
+  letter-spacing: 0;
 }
 
 .sheet-section-title {
-  font: 700 12px Manrope;
-  letter-spacing: 1.2px;
+  font: 700 14px Arial, sans-serif;
+  letter-spacing: 0;
   text-transform: uppercase;
   text-align: center;
-  padding: 10px;
-  background: #163b34;
-  color: #d5ff55;
-  border: 1px solid #dce1dc;
+  padding: 6px;
+  background: #e6e6e6;
+  color: #000;
+  border: 2px solid #000;
   border-top: none;
 }
 
 .form-grid {
-  border: 1px solid #dce1dc;
+  border: 2px solid #000;
   border-top: none;
 }
 
 .form-grid:last-child {
-  border-radius: 0 0 10px 10px;
+  border-radius: 0;
   overflow: hidden;
 }
 
 .form-row {
   display: flex;
-  border-bottom: 1px solid #eef0ed;
-  min-height: 42px;
+  border-bottom: 1px solid #000;
+  min-height: 32px;
 }
 
 .form-row:last-child {
@@ -810,14 +811,14 @@
 .form-label {
   width: 200px;
   flex-shrink: 0;
-  padding: 10px 14px;
+  padding: 5px 8px;
   font-size: 12px;
   font-weight: 700;
-  color: #4a524d;
+  color: #000;
   display: flex;
   align-items: center;
-  background: #f9faf8;
-  border-right: 1px solid #eef0ed;
+  background: #fff;
+  border-right: 1px solid #000;
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
