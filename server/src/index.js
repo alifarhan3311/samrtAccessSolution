@@ -1111,17 +1111,18 @@ app.patch('/api/tickets/:id', auth, async (req, res, next) => {
 // --- ATM Installation Forms ---
 app.post('/api/atm/installation', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
   try {
-    const data = req.body;
+    const data = { ...req.body, terminalId: String(req.body.terminalId).toUpperCase().trim() };
     if (!data.terminalId) return res.status(400).json({ message: 'Terminal ID is required' });
-
-    // Save the installation form
-    const installation = new AtmInstallation({
-      ...data,
-      createdBy: req.user._id
-    });
+    const previous = await AtmInstallation.findOne({ terminalId: data.terminalId, isCurrent: true }).sort({ version: -1 }).lean();
+    const formFields = Object.keys(AtmInstallation.schema.paths).filter(k => !['_id','__v','createdAt','updatedAt','terminalId','version','isCurrent','changedFields','createdBy'].includes(k));
+    const changedFields = formFields.filter(k => data[k] !== undefined && data[k] !== null && String(data[k]) !== '' && String(data[k]) !== String(previous?.[k] ?? ''));
+    const merged = previous ? { ...previous, ...Object.fromEntries(changedFields.map(k => [k, data[k]])) } : data;
+    delete merged._id; delete merged.__v; delete merged.createdAt; delete merged.updatedAt;
+    if (previous) await AtmInstallation.updateOne({ _id: previous._id }, { $set: { isCurrent: false } });
+    const installation = new AtmInstallation({ ...merged, terminalId: data.terminalId, version: (previous?.version || 0) + 1, isCurrent: true, changedFields, createdBy: req.user._id });
     await installation.save();
 
-    await audit(req, 'ATM_INSTALLATION_SUBMITTED', 'AtmInstallation', installation._id.toString(), { terminalId: data.terminalId });
+    await audit(req, 'ATM_INSTALLATION_SUBMITTED', 'AtmInstallation', installation._id.toString(), { terminalId: data.terminalId, version: installation.version, changedFields });
 
     res.status(201).json({ message: 'Installation form saved successfully', installation });
   } catch (e) { next(e); }
@@ -1130,7 +1131,7 @@ app.post('/api/atm/installation', auth, permit('admin', 'agent', 'atm'), async (
 app.get('/api/atm/installation/:terminalId', auth, permit('admin', 'agent', 'atm'), async (req, res, next) => {
   try {
     const termId = req.params.terminalId.toUpperCase().trim();
-    const form = await AtmInstallation.findOne({ terminalId: termId }).sort({ createdAt: -1 });
+    const form = await AtmInstallation.findOne({ terminalId: termId, isCurrent: { $ne: false } }).sort({ version: -1, createdAt: -1 });
     if (form) {
       return res.json(form);
     }

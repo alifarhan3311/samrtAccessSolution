@@ -109,6 +109,9 @@ const ticketSchema = new mongoose.Schema({
 
 const atmInstallationSchema = new mongoose.Schema({
   terminalId: { type: String, required: true, index: true },
+  version: { type: Number, default: 1 },
+  isCurrent: { type: Boolean, default: true, index: true },
+  changedFields: [{ type: String }],
   date: Date,
   newTerminalId: String,
   oldTerminalId: String,

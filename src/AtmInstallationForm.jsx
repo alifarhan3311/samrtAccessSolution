@@ -28,6 +28,11 @@ export default function AtmInstallationForm({ initialData = null, readOnly = fal
 
   const handleSubmit = async () => {
     if (!form.terminalId) return setMsg({ text: 'Terminal ID is required to save.', type: 'error' });
+    const isRevision = Boolean(form._id || form.version);
+    const confirmed = window.confirm(isRevision
+      ? 'Save this as a new revision? Only changed fields will be updated; the previous version will remain in history.'
+      : 'Save this ATM installation form?');
+    if (!confirmed) return;
     setLoading(true); setMsg({ text: '', type: '' });
     try {
       const res = await fetch('/api/atm/installation', { credentials: 'include',
@@ -37,7 +42,12 @@ export default function AtmInstallationForm({ initialData = null, readOnly = fal
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to save');
-      setMsg({ text: 'Terminal registered and form saved successfully!', type: 'success' });
+      const version = data.installation?.version || 1;
+      const changed = data.installation?.changedFields || [];
+      setForm(prev => ({ ...prev, ...data.installation }));
+      setMsg({ text: isRevision
+        ? `Revision ${version} saved. Updated fields: ${changed.length ? changed.join(', ') : 'none'}. Previous version is محفوظ in history.`
+        : `Installation form saved successfully as version ${version}.`, type: 'success' });
       if (onSuccess) {
         setTimeout(() => onSuccess(form.terminalId), 1500);
       }
@@ -523,7 +533,7 @@ export default function AtmInstallationForm({ initialData = null, readOnly = fal
         <div className="action-group">
           {!readOnly && (
             <button className="atm-btn primary" onClick={handleSubmit} disabled={loading}>
-              {loading ? 'Saving...' : '✓ Submit & Register'}
+              {loading ? 'Saving...' : (form._id || form.version ? '✓ Save New Revision' : '✓ Submit & Register')}
             </button>
           )}
           <button className="atm-btn secondary" onClick={handlePrint}>
