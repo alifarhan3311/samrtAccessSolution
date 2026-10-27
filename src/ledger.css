@@ -22,6 +22,10 @@
 .ledger-audit-records{display:flex;flex-direction:column;gap:14px;width:100%}
 .ledger-audit-records>.ledger-card{width:100%;box-sizing:border-box}
 .ledger-audit-records .table-wrap{overflow-x:auto}
+.audit-pagination{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 4px 2px;color:#68736d;font-size:12px}
+.audit-pagination>div{display:flex;align-items:center;gap:10px}
+.audit-pagination button{border:1px solid #d7dfda;background:#fff;border-radius:6px;padding:6px 10px;cursor:pointer}
+.audit-pagination button:disabled{opacity:.45;cursor:not-allowed}
 .ledger-card{background:#fff;border:1px solid #e0e4df;border-radius:12px;padding:22px}
 .ledger-card h3{font:700 19px Manrope;margin:4px 0 16px}
 .ledger-card table{width:100%;border-collapse:collapse;font-size:13px}

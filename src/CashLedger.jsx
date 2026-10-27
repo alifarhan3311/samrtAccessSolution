@@ -38,6 +38,8 @@ export default function CashLedger(){
   const[auditData, setAuditData] = useState(null);
   const[auditLoading, setAuditLoading] = useState(false);
   const[auditStatus, setAuditStatus] = useState('all');
+  const[auditPage, setAuditPage] = useState(1);
+  const auditPageSize = 15;
 
   // load agents once
   useEffect(()=>{req('/users/agents').then(setAgents).catch(()=>{})},[]);
@@ -116,6 +118,17 @@ export default function CashLedger(){
     try {
       await req(`/route-sheet/${job._id}`, { method:'PATCH', body:JSON.stringify({ discrepancyStatus:value }) });
       setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(j=>j._id===job._id ? {...j, discrepancyStatus:value} : j)} : prev);
+    } catch (e) { alert(e.message); }
+  };
+  const filteredAuditJobs = (auditData?.jobs || []).filter(j => auditStatus==='all' || (auditStatus==='discrepancy' ? (Number(j.cashToLoad||0)-actualLoaded(j)>0) : j.status===auditStatus));
+  const auditPageCount = Math.max(1, Math.ceil(filteredAuditJobs.length / auditPageSize));
+  const visibleAuditJobs = filteredAuditJobs.slice((auditPage - 1) * auditPageSize, auditPage * auditPageSize);
+  useEffect(() => { setAuditPage(1); }, [auditAgentId, auditStatus, dateRange.from, dateRange.to]);
+  const approveJob = async job => {
+    if (!confirm(`Approve ${job.terminalId} and mark the agent report complete?`)) return;
+    try {
+      await req(`/route-sheet/${job._id}`, { method:'PATCH', body:JSON.stringify({ routeCashLoaded: actualLoaded(job), discrepancyStatus:'complete' }) });
+      setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(j=>j._id===job._id ? {...j, discrepancyStatus:'complete', status:'approved', routeCashLoaded:actualLoaded(job)} : j)} : prev);
     } catch (e) { alert(e.message); }
   };
 
@@ -317,11 +330,11 @@ export default function CashLedger(){
           <div className="ledger-card" style={{border:'1px solid #eee'}}>
             <p className="eyebrow">JOBS RECORD</p>
             <h3>Assigned ATMs</h3>
-            {(() => { const jobs = auditData.jobs.filter(j => auditStatus==='all' || (auditStatus==='discrepancy' ? (Number(j.cashToLoad||0)-actualLoaded(j)>0) : j.status===auditStatus)); return jobs.length===0 ? <p className="muted">No matching dispatch records.</p> :
+            {filteredAuditJobs.length===0 ? <p className="muted">No matching dispatch records.</p> :
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Date</th><th>Terminal</th><th>Job status</th><th>To be load</th><th>Cash loaded</th><th>Difference</th><th>Discrepancy status</th><th></th></tr></thead>
-                <tbody>{jobs.map(j=>{
+                <thead><tr><th>Date</th><th>Terminal</th><th>Job status</th><th>To be load</th><th>Cash loaded</th><th>Short by</th><th>Resolution</th><th>Actions</th></tr></thead>
+                <tbody>{visibleAuditJobs.map(j=>{
                   const loaded=actualLoaded(j); const difference=Math.max(0,Number(j.cashToLoad||0)-loaded);
                   return <tr key={j._id}>
                   <td style={{whiteSpace:'nowrap'}}>{fmt(j.createdAt)}</td>
@@ -331,10 +344,11 @@ export default function CashLedger(){
                   <td><input type="number" min="0" defaultValue={loaded} onBlur={e=>updateJobLoaded(j,e.target.value)} style={{width:90}} /></td>
                   <td><b style={{color:difference?'#b42318':'#267249'}}>{money(difference)}</b></td>
                   <td><select value={j.discrepancyStatus || (difference ? 'open' : 'complete')} onChange={e=>updateDiscrepancyStatus(j,e.target.value)} style={{padding:'5px 7px',borderRadius:6,border:'1px solid #ccc'}}><option value="open">Open</option><option value="complete">Complete</option></select></td>
-                  <td><button className="del-btn" title="Delete" onClick={()=>deleteJob(j)}>&#10005;</button></td>
+                  <td style={{whiteSpace:'nowrap'}}>{j.discrepancyStatus !== 'complete' && <button onClick={()=>approveJob(j)} style={{border:0,borderRadius:6,padding:'5px 8px',background:'#dff4e7',color:'#17643a',cursor:'pointer',fontWeight:700}}>Approve</button>} <button className="del-btn" title="Delete" onClick={()=>deleteJob(j)}>&#10005;</button></td>
                 </tr>})}</tbody>
               </table>
-            </div>})()}
+              <div className="audit-pagination"><span>Showing {(auditPage - 1) * auditPageSize + 1}–{Math.min(auditPage * auditPageSize, filteredAuditJobs.length)} of {filteredAuditJobs.length}</span><div><button disabled={auditPage <= 1} onClick={()=>setAuditPage(p=>Math.max(1,p-1))}>Previous</button><b>Page {auditPage} of {auditPageCount}</b><button disabled={auditPage >= auditPageCount} onClick={()=>setAuditPage(p=>Math.min(auditPageCount,p+1))}>Next</button></div></div>
+            </div>}
           </div>
 
           <div className="ledger-card" style={{border:'1px solid #eee'}}>

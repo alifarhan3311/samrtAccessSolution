@@ -296,6 +296,19 @@ app.patch('/api/route-sheet/:jobId', auth, permit('admin', 'manager', 'agent'), 
     if (b.routeCashToLoad !== undefined) {
       job.cashToLoad = job.routeCashToLoad === undefined ? 0 : job.routeCashToLoad * 20;
     }
+    // Completing the discrepancy is the administrator's confirmation that the
+    // agent's cash report is accepted. Keep the same approved state everywhere.
+    if (b.discrepancyStatus === 'complete') {
+      const loadedAmount = Number(job.routeCashLoaded ?? 0);
+      const wasApproved = job.status === 'approved';
+      job.status = 'approved';
+      job.approvedAt = new Date();
+      job.approvedBy = req.user._id;
+      // Apply the approved cash exactly once to the terminal's live balance.
+      if (!wasApproved && job.terminal && loadedAmount > 0) {
+        await Terminal.updateOne({ _id: job.terminal }, { $inc: { 'official.cashBalance': loadedAmount } });
+      }
+    }
     await job.save();
     await audit(req, 'ROUTE_SHEET_UPDATED', 'AgentJob', job.id, { terminalId: job.terminalId, fields: submittedFields, before, after: { ...Object.fromEntries(submittedFields.map(field => [field, job[field] ?? null])), ...(b.routeCashToLoad !== undefined ? { cashToLoad: job.cashToLoad } : {}) } });
     res.json(job);
