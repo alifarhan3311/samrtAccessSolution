@@ -162,7 +162,7 @@ export default function Notifications({go}){
         {data.statusImport && (
           <div className="latest-import" style={{ marginTop: 0 }}>
             <span style={{ fontWeight: 700, minWidth: '180px', color: '#15803d' }}>
-              📄 Terminal Status File:
+              📄 Columbus Data:
             </span>
             <b style={{ color: '#183d36' }}>{data.statusImport.fileName}</b>
             <small style={{ fontWeight: 600, color: '#4b5563', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -173,7 +173,7 @@ export default function Notifications({go}){
         {data.mgmtImport && (
           <div className="latest-import" style={{ marginTop: 0 }}>
             <span style={{ fontWeight: 700, minWidth: '180px', color: '#0369a1' }}>
-              📑 Terminal Management File:
+              📑 Data Stream:
             </span>
             <b style={{ color: '#183d36' }}>{data.mgmtImport.fileName}</b>
             <small style={{ fontWeight: 600, color: '#4b5563', display: 'flex', alignItems: 'center', gap: '4px' }}>
