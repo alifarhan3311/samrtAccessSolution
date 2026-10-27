@@ -10,7 +10,6 @@ export default function AtmForms() {
   const [activeModal, setActiveModal] = useState(null);
   const [viewingForm, setViewingForm] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
-  const [installationChoiceId, setInstallationChoiceId] = useState('');
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = user.role === 'admin';
@@ -161,43 +160,9 @@ export default function AtmForms() {
     }
   };
 
-  const openInstallationChoice = () => {
-    setViewingForm(null);
-    setInstallationChoiceId('');
-    setActiveModal('installation-choice');
-  };
-
-  const loadCurrentInstallation = async () => {
-    const id = installationChoiceId.trim().toUpperCase();
-    if (!id) return;
-    try {
-      const res = await fetch(`/api/atm/installation/${encodeURIComponent(id)}`, { credentials: 'include' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Current form not found');
-      setViewingForm(data);
-      setActiveModal('installation');
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
   const renderModalContent = () => {
     const props = { initialData: viewingForm, readOnly: !!viewingForm, onSuccess: handleModalSuccess };
     switch (activeModal) {
-      case 'installation-choice': return (
-        <div className="installation-choice">
-          <p className="eyebrow">ATM INSTALLATION FORM</p>
-          <h2>How do you want to continue?</h2>
-          <p className="choice-help">Choose a new form, or load the current form to create a revised version. Previous versions stay محفوظ in history.</p>
-          <div className="choice-actions">
-            <button className="atm-btn primary" onClick={() => { setViewingForm(null); setActiveModal('installation'); }}>＋ Start New Form</button>
-            <div className="current-form-choice">
-              <label>Update current form</label>
-              <div><input value={installationChoiceId} onChange={e=>setInstallationChoiceId(e.target.value)} onKeyDown={e=>e.key==='Enter'&&loadCurrentInstallation()} placeholder="Enter Terminal ID" /><button className="atm-btn load" onClick={loadCurrentInstallation}>Load Current</button></div>
-            </div>
-          </div>
-        </div>
-      );
       case 'installation': return <AtmInstallationForm {...props} />;
       case 'agreement': return <AtmAgreementForm {...props} />;
       case 'removal': return <AtmRemovalForm {...props} />;
@@ -334,7 +299,7 @@ export default function AtmForms() {
           <p className="atm-eyebrow-sub">Physical Form Scanning, Document Uploads & Full Lifecycle Timeline</p>
         </div>
         <div className="atm-buttons-group">
-          <button className="atm-action-btn" onClick={openInstallationChoice}>
+          <button className="atm-action-btn" onClick={() => setActiveModal('installation')}>
             ➕ ATM Installation Form
           </button>
           <button className="atm-action-btn" onClick={() => setActiveModal('agreement')}>

@@ -765,14 +765,6 @@
   background: #fff;
 }
 
-.installation-choice{padding:56px 34px;text-align:center;max-width:720px;margin:0 auto}
-.installation-choice h2{margin:8px 0 10px;font:800 24px Manrope,Arial,sans-serif;color:#173e36}
-.choice-help{color:#68736d;line-height:1.6;margin:0 auto 28px;max-width:560px}
-.choice-actions{display:flex;align-items:stretch;justify-content:center;gap:18px;flex-wrap:wrap}
-.current-form-choice{display:flex;flex-direction:column;gap:8px;text-align:left;padding:16px;border:1px solid #dce1dc;border-radius:10px;background:#f8faf7}
-.current-form-choice label{font-size:12px;font-weight:800;color:#173e36}
-.current-form-choice>div{display:flex;gap:8px}
-.current-form-choice input{min-width:190px;padding:10px 12px;border:1px solid #cbd5ce;border-radius:7px}
 
 .sheet-title {
   font: 900 18px Arial, sans-serif;
