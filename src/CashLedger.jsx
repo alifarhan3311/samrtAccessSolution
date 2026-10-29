@@ -100,9 +100,14 @@ export default function CashLedger(){
   const actualLoaded = j => Number.isFinite(Number(j.routeCashLoaded))
     ? Number(j.routeCashLoaded)
     : Number([...j.events].reverse().find(e=>e.status==='cash_loaded')?.cashLoaded ?? (j.status==='approved'?j.cashToLoad:0));
+  const bills20 = amount => {
+    const value = Number(amount || 0) / 20;
+    return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+  };
   const updateJobLoaded = async (job, value) => {
-    const amount = Number(value);
-    if (!Number.isFinite(amount) || amount < 0) return;
+    const billCount = Number(value);
+    if (!Number.isFinite(billCount) || billCount < 0) return;
+    const amount = billCount * 20;
     try {
       await req(`/route-sheet/${job._id}`, { method:'PATCH', body:JSON.stringify({ routeCashLoaded: amount }) });
       setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(j => j._id===job._id ? {...j, routeCashLoaded: amount} : j)} : prev);
@@ -334,16 +339,16 @@ export default function CashLedger(){
             {filteredAuditJobs.length===0 ? <p className="muted">No matching dispatch records.</p> :
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Date</th><th>Terminal</th><th>Job status</th><th>Expected cash</th><th>Actual cash loaded</th><th>Difference / short</th><th>Resolution</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Date</th><th>Terminal</th><th>Job status</th><th>Expected bills ($20)</th><th>Actual bills ($20)</th><th>Difference bills</th><th>Resolution</th><th>Actions</th></tr></thead>
                 <tbody>{visibleAuditJobs.map(j=>{
                   const loaded=actualLoaded(j); const difference=Math.max(0,Number(j.cashToLoad||0)-loaded);
                   return <tr key={j._id}>
                   <td style={{whiteSpace:'nowrap'}}>{fmt(j.createdAt)}</td>
                   <td><b>{j.terminalId}</b><br/><span style={{fontSize:11}}>{j.businessName}</span></td>
                   <td><span className={'badge badge-'+j.status.replace('_','-')} style={{fontSize:10}}>{j.status.replace('_',' ')}</span></td>
-                  <td>{money(j.cashToLoad)}</td>
-                  <td><input type="number" min="0" defaultValue={loaded} onBlur={e=>updateJobLoaded(j,e.target.value)} style={{width:90}} /></td>
-                  <td><b style={{color:difference?'#b42318':'#267249'}}>{money(difference)}</b></td>
+                  <td><b>{bills20(j.cashToLoad)}</b><small style={{display:'block',color:'#7a847e'}}>{money(j.cashToLoad)}</small></td>
+                  <td><input type="number" min="0" step="1" defaultValue={loaded / 20} onBlur={e=>updateJobLoaded(j,e.target.value)} style={{width:90}} /><small style={{display:'block',color:'#7a847e'}}>{money(loaded)}</small></td>
+                  <td><b style={{color:difference?'#b42318':'#267249'}}>{bills20(difference)}</b><small style={{display:'block',color:'#7a847e'}}>{money(difference)}</small></td>
                   <td><select value={j.discrepancyStatus || (difference ? 'open' : 'complete')} onChange={e=>updateDiscrepancyStatus(j,e.target.value)} style={{padding:'5px 7px',borderRadius:6,border:'1px solid #ccc'}}><option value="open">Open</option><option value="complete">Complete</option></select></td>
                   <td style={{whiteSpace:'nowrap'}}>{j.discrepancyStatus !== 'complete' && <button onClick={()=>approveJob(j)} style={{border:0,borderRadius:6,padding:'5px 8px',background:'#dff4e7',color:'#17643a',cursor:'pointer',fontWeight:700}}>Approve</button>} <button className="del-btn" title="Delete" onClick={()=>deleteJob(j)}>&#10005;</button></td>
                 </tr>})}</tbody>
