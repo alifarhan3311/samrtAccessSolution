@@ -285,7 +285,7 @@ app.patch('/api/route-sheet/:jobId', auth, permit('admin', 'manager', 'agent'), 
         if (value !== null && (!Number.isFinite(Number(value)) || Number(value) < 0)) return res.status(400).json({ message: `${field} must be a non-negative number` });
         job[field] = value === null ? undefined : Number(value);
       } else if (field === 'discrepancyStatus') {
-        if (!['open', 'complete'].includes(value)) return res.status(400).json({ message: 'Invalid discrepancy status' });
+        if (!['open', 'complete', 'rejected'].includes(value)) return res.status(400).json({ message: 'Invalid discrepancy status' });
         job[field] = value;
       } else {
         job[field] = value === null ? undefined : String(value).slice(0, field === 'routeNote' ? 1000 : 20);
@@ -308,6 +308,8 @@ app.patch('/api/route-sheet/:jobId', auth, permit('admin', 'manager', 'agent'), 
       if (!wasApproved && job.terminal && loadedAmount > 0) {
         await Terminal.updateOne({ _id: job.terminal }, { $inc: { 'official.cashBalance': loadedAmount } });
       }
+    } else if (b.discrepancyStatus === 'rejected') {
+      job.status = 'issue_reported';
     }
     await job.save();
     await audit(req, 'ROUTE_SHEET_UPDATED', 'AgentJob', job.id, { terminalId: job.terminalId, fields: submittedFields, before, after: { ...Object.fromEntries(submittedFields.map(field => [field, job[field] ?? null])), ...(b.routeCashToLoad !== undefined ? { cashToLoad: job.cashToLoad } : {}) } });

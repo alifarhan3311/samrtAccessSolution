@@ -53,7 +53,7 @@ const agentJobSchema = new mongoose.Schema({
   agent: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true }, assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   businessName: String, address: String, city: String, wishAmount: { type: Number, min: 0, default: 0 }, cashToLoad: { type: Number, min: 0, required: true },
   dueAt: { type: Date, required: true, index: true }, status: { type: String, enum: ['assigned', 'accepted', 'travelling', 'cash_loaded', 'issue_reported', 'approved', 'cancelled'], default: 'assigned', index: true },
-  discrepancyStatus: { type: String, enum: ['open', 'complete'], default: 'open', index: true },
+  discrepancyStatus: { type: String, enum: ['open', 'complete', 'rejected'], default: 'open', index: true },
   events: [jobEventSchema], approvedAt: Date, approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   routeExistingCash: Number, routeCashLoaded: Number, routeLoadTime: String,
   routeBillsRemaining: Number, routeCashToLoad: Number, routeNote: String

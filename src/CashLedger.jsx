@@ -39,6 +39,7 @@ export default function CashLedger(){
   const[auditLoading, setAuditLoading] = useState(false);
   // Show only cash discrepancies by default; admins can switch to all statuses.
   const[auditStatus, setAuditStatus] = useState('discrepancy');
+  const[dateSort, setDateSort] = useState('asc');
   const[auditPage, setAuditPage] = useState(1);
   const auditPageSize = 15;
 
@@ -135,6 +136,29 @@ export default function CashLedger(){
     try {
       await req(`/route-sheet/${job._id}`, { method:'PATCH', body:JSON.stringify({ routeCashLoaded: actualLoaded(job), discrepancyStatus:'complete' }) });
       setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(j=>j._id===job._id ? {...j, discrepancyStatus:'complete', status:'approved', routeCashLoaded:actualLoaded(job)} : j)} : prev);
+    } catch (e) { alert(e.message); }
+  };
+  const auditJobs = auditData?.jobs || [];
+  const aggregateExpectedBills = auditJobs.reduce((sum, job) => sum + Number(job.cashToLoad || 0) / 20, 0);
+  const aggregateLoadedBills = auditJobs.reduce((sum, job) => sum + actualLoaded(job) / 20, 0);
+  const aggregateDifferenceBills = Math.max(0, aggregateExpectedBills - aggregateLoadedBills);
+  const dateKey = job => new Date(job.createdAt || job.dueAt || Date.now()).toISOString().slice(0, 10);
+  const dailyAuditGroups = Object.entries(auditJobs.reduce((groups, job) => {
+    const key = dateKey(job);
+    (groups[key] ||= []).push(job);
+    return groups;
+  }, {})).sort(([a], [b]) => dateSort === 'asc' ? a.localeCompare(b) : b.localeCompare(a));
+  const aggregateStatus = auditJobs.length && auditJobs.every(job => job.discrepancyStatus === 'complete' || job.status === 'approved')
+    ? 'approved' : auditJobs.some(job => job.discrepancyStatus === 'rejected') ? 'rejected' : 'pending';
+  const setAggregateStatus = async (status, targetJobs = auditJobs) => {
+    if (!targetJobs.length) return;
+    const label = status === 'complete' ? 'approve' : 'reject';
+    if (!confirm(`Are you sure you want to ${label} this agent's complete dispatch summary?`)) return;
+    try {
+      await Promise.all(targetJobs.map(job => req(`/route-sheet/${job._id}`, {
+        method:'PATCH', body:JSON.stringify({ discrepancyStatus: status })
+      })));
+      setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(job => ({...job, discrepancyStatus:status, status:status === 'complete' ? 'approved' : 'issue_reported'}))} : prev);
     } catch (e) { alert(e.message); }
   };
 
@@ -301,6 +325,12 @@ export default function CashLedger(){
               {['assigned','accepted','travelling','cash_loaded','issue_reported','approved','cancelled'].map(s=><option key={s} value={s}>{s.replace('_',' ')}</option>)}
             </select>
           </label>
+          <label style={{display:'flex',flexDirection:'column',gap:4,fontSize:12,fontWeight:700}}>Date order
+            <select value={dateSort} onChange={e=>setDateSort(e.target.value)} style={{padding:8,borderRadius:6,border:'1px solid #ccc'}}>
+              <option value="asc">Ascending (oldest first)</option>
+              <option value="desc">Descending (latest first)</option>
+            </select>
+          </label>
         </div>
       </div>
 
@@ -333,29 +363,29 @@ export default function CashLedger(){
         </div>
 
         <div className="ledger-audit-records">
-          <div className="ledger-card" style={{border:'1px solid #eee'}}>
-            <p className="eyebrow">JOBS RECORD</p>
-            <h3>Assigned ATMs</h3>
-            {filteredAuditJobs.length===0 ? <p className="muted">No matching dispatch records.</p> :
-            <div className="table-wrap">
-              <table>
-                <thead><tr><th>Date</th><th>Terminal</th><th>Job status</th><th>Expected bills ($20)</th><th>Actual bills ($20)</th><th>Difference bills</th><th>Resolution</th><th>Actions</th></tr></thead>
-                <tbody>{visibleAuditJobs.map(j=>{
-                  const loaded=actualLoaded(j); const difference=Math.max(0,Number(j.cashToLoad||0)-loaded);
-                  return <tr key={j._id}>
-                  <td style={{whiteSpace:'nowrap'}}>{fmt(j.createdAt)}</td>
-                  <td><b>{j.terminalId}</b><br/><span style={{fontSize:11}}>{j.businessName}</span></td>
-                  <td><span className={'badge badge-'+j.status.replace('_','-')} style={{fontSize:10}}>{j.status.replace('_',' ')}</span></td>
-                  <td><b>{bills20(j.cashToLoad)}</b><small style={{display:'block',color:'#7a847e'}}>{money(j.cashToLoad)}</small></td>
-                  <td><input type="number" min="0" step="1" defaultValue={loaded / 20} onBlur={e=>updateJobLoaded(j,e.target.value)} style={{width:90}} /><small style={{display:'block',color:'#7a847e'}}>{money(loaded)}</small></td>
-                  <td><b style={{color:difference?'#b42318':'#267249'}}>{bills20(difference)}</b><small style={{display:'block',color:'#7a847e'}}>{money(difference)}</small></td>
-                  <td><select value={j.discrepancyStatus || (difference ? 'open' : 'complete')} onChange={e=>updateDiscrepancyStatus(j,e.target.value)} style={{padding:'5px 7px',borderRadius:6,border:'1px solid #ccc'}}><option value="open">Open</option><option value="complete">Complete</option></select></td>
-                  <td style={{whiteSpace:'nowrap'}}>{j.discrepancyStatus !== 'complete' && <button onClick={()=>approveJob(j)} style={{border:0,borderRadius:6,padding:'5px 8px',background:'#dff4e7',color:'#17643a',cursor:'pointer',fontWeight:700}}>Approve</button>} <button className="del-btn" title="Delete" onClick={()=>deleteJob(j)}>&#10005;</button></td>
-                </tr>})}</tbody>
-              </table>
-              <div className="audit-pagination"><span>Showing {(auditPage - 1) * auditPageSize + 1}–{Math.min(auditPage * auditPageSize, filteredAuditJobs.length)} of {filteredAuditJobs.length}</span><div><button disabled={auditPage <= 1} onClick={()=>setAuditPage(p=>Math.max(1,p-1))}>Previous</button><b>Page {auditPage} of {auditPageCount}</b><button disabled={auditPage >= auditPageCount} onClick={()=>setAuditPage(p=>Math.min(auditPageCount,p+1))}>Next</button></div></div>
-            </div>}
-          </div>
+          {dailyAuditGroups.length === 0 ? <div className="ledger-card"><p className="muted">No dispatch records in this date range.</p></div> : dailyAuditGroups.map(([day, jobs]) => {
+            const expected = jobs.reduce((sum, job) => sum + Number(job.cashToLoad || 0), 0);
+            const loaded = jobs.reduce((sum, job) => sum + actualLoaded(job), 0);
+            const difference = Math.max(0, expected - loaded);
+            const status = jobs.every(job => job.discrepancyStatus === 'complete' || job.status === 'approved') ? 'approved' : jobs.some(job => job.discrepancyStatus === 'rejected') ? 'rejected' : 'pending';
+            return <div className="ledger-card" style={{border:'1px solid #eee',marginBottom:16}} key={day}>
+              <p className="eyebrow">{new Date(`${day}T12:00:00`).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})}</p>
+              <h3>Cash dispatch summary</h3>
+              <p className="muted">Is date par agent ko assign ki gayi tamam machines ka combined total.</p>
+              <div className="ledger-stats" style={{margin:'18px 0 0'}}>
+                <div className="lstat amber"><small>EXPECTED CASH</small><strong>{money(expected)}</strong><span>{bills20(expected)} bills ($20)</span></div>
+                <div className="lstat blue"><small>ACTUAL LOADED CASH</small><strong>{money(loaded)}</strong><span>{bills20(loaded)} bills ($20)</span></div>
+                <div className={'lstat '+(difference ? 'red' : 'green')}><small>TOTAL DIFFERENCE</small><strong>{money(difference)}</strong><span>{bills20(difference)} bills shortfall</span></div>
+              </div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginTop:22,paddingTop:18,borderTop:'1px solid #eee'}}>
+                <div><b>Status:</b> <span className={'badge badge-'+status}>{status === 'pending' ? 'Pending approval' : status}</span></div>
+                <div style={{display:'flex',gap:10}}>
+                  <button onClick={()=>setAggregateStatus('complete', jobs)} disabled={status==='approved'} style={{border:0,borderRadius:7,padding:'9px 16px',background:'#dff4e7',color:'#17643a',cursor:'pointer',fontWeight:700}}>Approve summary</button>
+                  <button onClick={()=>setAggregateStatus('rejected', jobs)} disabled={status==='rejected'} style={{border:0,borderRadius:7,padding:'9px 16px',background:'#fde8e7',color:'#b42318',cursor:'pointer',fontWeight:700}}>Reject summary</button>
+                </div>
+              </div>
+            </div>;
+          })}
 
           <div className="ledger-card" style={{border:'1px solid #eee'}}>
             <p className="eyebrow">CASH RETURNS RECORD</p>
