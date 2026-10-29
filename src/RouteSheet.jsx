@@ -299,7 +299,7 @@ export default function RouteSheet() {
                       </tr>
                       {group.jobs.map((job, jIdx) => {
                         const term = job.terminal || {};
-                        const bizName = term.current?.businessName || term.official?.name || job.businessName;
+                        const bizName = term.official?.tempName || term.current?.businessName || term.official?.name || job.businessName || job.terminalId;
                         const address = term.current?.address || job.address || term.official?.address;
                         const city = term.current?.city || term.official?.city || job.city;
                         const status = term.official?.status === 'Inactive' ? 'Down' : 'Up';

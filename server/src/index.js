@@ -261,7 +261,7 @@ app.get('/api/jobs/active-terminal/:terminalId', auth, async (req, res, next) =>
     res.json({ busy: Boolean(job), job });
   } catch (e) { next(e) }
 });
-app.get('/api/route-sheet', auth, permit('admin', 'manager', 'agent'), async (req, res, next) => { try { const q = { status: { $nin: ['cancelled'] } }; if (req.user.role === 'agent') q.agent = req.user._id; else if (req.query.agentId) q.agent = req.query.agentId; if (req.query.date) { const today = new Date(req.query.date + 'T00:00:00.000Z'); const tomorrow = new Date(today); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); q.dueAt = { $gte: today, $lt: tomorrow }; } const jobs = await AgentJob.find(q).populate('terminal', 'terminalId official.status official.name official.locationArea official.cashBalance official.city official.address current.businessName current.address current.city').lean(); const validJobs = jobs.filter(j => j.terminal || j.isSpareCash); const grouped = {}; for (const job of validJobs) { const area = job.isSpareCash ? 'SPARE CASH' : (job.terminal?.official?.locationArea || 'Unassigned Area'); if (!grouped[area]) grouped[area] = []; grouped[area].push(job); } const sortedGroups = Object.keys(grouped).sort().map(key => ({ area: key, jobs: grouped[key].sort((a, b) => (a.terminalId || '').localeCompare(b.terminalId || '')) })); res.json(sortedGroups); } catch (e) { next(e) } });
+app.get('/api/route-sheet', auth, permit('admin', 'manager', 'agent'), async (req, res, next) => { try { const q = { status: { $nin: ['cancelled'] } }; if (req.user.role === 'agent') q.agent = req.user._id; else if (req.query.agentId) q.agent = req.query.agentId; if (req.query.date) { const today = new Date(req.query.date + 'T00:00:00.000Z'); const tomorrow = new Date(today); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); q.dueAt = { $gte: today, $lt: tomorrow }; } const jobs = await AgentJob.find(q).populate('terminal', 'terminalId official.status official.tempName official.name official.locationArea official.cashBalance official.city official.address current.businessName current.address current.city').lean(); const validJobs = jobs.filter(j => j.terminal || j.isSpareCash); const grouped = {}; for (const job of validJobs) { const area = job.isSpareCash ? 'SPARE CASH' : (job.terminal?.official?.locationArea || 'Unassigned Area'); if (!grouped[area]) grouped[area] = []; grouped[area].push(job); } const sortedGroups = Object.keys(grouped).sort().map(key => ({ area: key, jobs: grouped[key].sort((a, b) => (a.terminalId || '').localeCompare(b.terminalId || '')) })); res.json(sortedGroups); } catch (e) { next(e) } });
 app.patch('/api/route-sheet/:jobId', auth, permit('admin', 'manager', 'agent'), async (req, res, next) => {
   try {
     const job = await AgentJob.findById(req.params.jobId);
@@ -490,8 +490,15 @@ app.get('/api/cash/agent-audit', auth, permit('admin', 'manager', 'ledger'), asy
     const { agentId, from, to } = req.query;
     if (!agentId) return res.status(400).json({ message: 'Agent ID is required' });
     const dateQuery = {};
-    if (from) dateQuery.$gte = new Date(from + 'T00:00:00');
-    if (to) dateQuery.$lte = new Date(to + 'T23:59:59.999');
+    // Audit dates are business dates in Toronto, while Mongo stores UTC.
+    // Use the local midnight boundary so a 29-to-29 filter cannot include
+    // records that display as October 28 in the UI.
+    if (from) dateQuery.$gte = new Date(from + 'T00:00:00-04:00');
+    if (to) {
+      const end = new Date(to + 'T00:00:00-04:00');
+      end.setUTCDate(end.getUTCDate() + 1);
+      dateQuery.$lt = end;
+    }
 
     // Find jobs assigned in this period
     const jobQuery = { agent: agentId, status: { $nin: ['cancelled'] } };
