@@ -610,15 +610,15 @@ export default function RouteSheet() {
           </div>
 
           {/* 3. Cash Returns Section */}
-          {!isAgent && (
+          {(
             <div className="ledger-split no-print" style={{ marginTop: '40px', gap: '20px' }}>
               <div className="ledger-card">
                 <p className="eyebrow">RECORD CASH RETURN</p>
-                <h3>Log unspent cash from agent</h3>
+                <h3>{isAgent ? 'Submit returned bills' : 'Log unspent cash from agent'}</h3>
                 <form onSubmit={addReturn} className="ledger-form" style={{ marginTop: '16px' }}>
                   <label>
-                    Cash returned (CAD)
-                    <input type="number" min="0" step="1" required value={rForm.amount} onChange={e => setRForm(p => ({ ...p, amount: e.target.value }))} placeholder="e.g. 240" />
+                    Bills returned
+                    <input type="number" min="0" step="1" required value={rForm.amount} onChange={e => setRForm(p => ({ ...p, amount: e.target.value }))} placeholder="e.g. 25" />
                   </label>
                   <label>
                     Terminal ID (Optional)
@@ -629,7 +629,7 @@ export default function RouteSheet() {
                     <input type="text" value={rForm.note} onChange={e => setRForm(p => ({ ...p, note: e.target.value }))} placeholder="Why returned?" />
                   </label>
                   {rMsg.text && <p className={rMsg.ok ? 'success' : 'error'} style={{ margin: 0 }}>{rMsg.text}</p>}
-                  <button disabled={rSaving || loading} style={{ marginTop: '8px' }}>{rSaving ? 'Saving...' : 'Record return \u2192'}</button>
+                  <button disabled={rSaving || loading} style={{ marginTop: '8px' }}>{rSaving ? 'Saving...' : (isAgent ? 'Submit returned bills \u2192' : 'Record return \u2192')}</button>
                 </form>
                 <div className="ledger-summary" style={{ marginTop: '20px' }}>
                   <b>Period total returned: ${(returns.reduce((sum, r) => sum + r.amount, 0)).toLocaleString()}</b>
@@ -664,7 +664,8 @@ export default function RouteSheet() {
                             <td style={{ fontSize: '12px', color: '#555' }}>{r.note || '—'}</td>
                             <td style={{ fontSize: '12px' }}>{r.recordedBy?.name}</td>
                             <td style={{ textAlign: 'right' }}>
-                              <button className="del-btn" title="Delete" onClick={() => delReturn(r._id)}>&#10005;</button>
+                              <span style={{fontSize:11,color:r.status==='approved'?'#267249':r.status==='rejected'?'#b42318':'#9a6700'}}>{r.status || 'pending'}</span>
+                              {!isAgent && <button className="del-btn" title="Delete" onClick={() => delReturn(r._id)}>&#10005;</button>}
                             </td>
                           </tr>
                         ))}

@@ -65,6 +65,9 @@ const cashWithdrawalSchema = new mongoose.Schema({
   note: { type: String, maxlength: 500 },
   withdrawnBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   date: { type: Date, default: Date.now, index: true },
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
+  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reviewedAt: Date,
 }, { timestamps: true });
 
 // Cash returned by agent after job(s) — unspent cash credited back

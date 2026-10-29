@@ -148,6 +148,11 @@ export default function CashLedger(){
     (groups[key] ||= []).push(job);
     return groups;
   }, {})).sort(([a], [b]) => dateSort === 'asc' ? a.localeCompare(b) : b.localeCompare(a));
+  const returnsByDay = (auditData?.returns || []).reduce((groups, item) => {
+    const key = dateKey(item);
+    (groups[key] ||= []).push(item);
+    return groups;
+  }, {});
   const aggregateStatus = auditJobs.length && auditJobs.every(job => job.discrepancyStatus === 'complete' || job.status === 'approved')
     ? 'approved' : auditJobs.some(job => job.discrepancyStatus === 'rejected') ? 'rejected' : 'pending';
   const setAggregateStatus = async (status, targetJobs = auditJobs) => {
@@ -159,6 +164,12 @@ export default function CashLedger(){
         method:'PATCH', body:JSON.stringify({ discrepancyStatus: status })
       })));
       setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(job => ({...job, discrepancyStatus:status, status:status === 'complete' ? 'approved' : 'issue_reported'}))} : prev);
+    } catch (e) { alert(e.message); }
+  };
+  const reviewReturn = async (id, status) => {
+    try {
+      await req(`/cash/returns/${id}`, { method:'PATCH', body:JSON.stringify({status}) });
+      setAuditData(prev => prev ? {...prev, returns: prev.returns.map(item => item._id === id ? {...item, status} : item)} : prev);
     } catch (e) { alert(e.message); }
   };
 
@@ -341,41 +352,44 @@ export default function CashLedger(){
       {auditAgentId && !auditLoading && auditData && <>
         <div className="ledger-stats" style={{marginBottom:24}}>
           <div className="lstat amber">
-            <small>CASH GIVEN (DISPATCHED)</small>
-            <strong>{money(auditData.summary.totalDispatched)}</strong>
+            <small>EXPECTED BILLS ($20)</small>
+            <strong>{bills20(auditData.summary.totalDispatched)}</strong>
             <span>{auditData.summary.totalJobs} jobs assigned</span>
           </div>
           <div className="lstat blue">
-            <small>CASH LOADED</small>
-            <strong>{money(auditData.summary.totalLoaded)}</strong>
+            <small>ACTUAL LOADED BILLS ($20)</small>
+            <strong>{Number(auditData.summary.totalLoaded || 0).toLocaleString()}</strong>
             <span>{auditData.summary.jobsApproved} jobs approved</span>
           </div>
           <div className="lstat teal">
-            <small>CASH RETURNED</small>
-            <strong>{money(auditData.summary.totalReturned)}</strong>
+            <small>RETURNED BILLS ($20)</small>
+            <strong>{Number(auditData.summary.totalReturned || 0).toLocaleString()}</strong>
             <span>{auditData.returns.length} returns logged</span>
           </div>
           <div className={'lstat '+(auditData.summary.unaccounted>0?'red':'green')}>
-            <small>UNACCOUNTED (SHORTFALL)</small>
-            <strong>{money(auditData.summary.unaccounted)}</strong>
-            <span>Given - Loaded - Returned</span>
+            <small>BILL DIFFERENCE</small>
+            <strong>{Number(auditData.summary.unaccounted || 0).toLocaleString()}</strong>
+            <span>Expected - Loaded - Returned</span>
           </div>
         </div>
 
         <div className="ledger-audit-records">
           {dailyAuditGroups.length === 0 ? <div className="ledger-card"><p className="muted">No dispatch records in this date range.</p></div> : dailyAuditGroups.map(([day, jobs]) => {
-            const expected = jobs.reduce((sum, job) => sum + Number(job.cashToLoad || 0), 0);
+            const expected = jobs.reduce((sum, job) => sum + Number(job.cashToLoad || 0) / 20, 0);
             const loaded = jobs.reduce((sum, job) => sum + actualLoaded(job), 0);
-            const difference = Math.max(0, expected - loaded);
+            const returned = (returnsByDay[day] || []).filter(item => item.status === 'approved').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+            const difference = Math.max(0, expected - loaded - returned);
             const status = jobs.every(job => job.discrepancyStatus === 'complete' || job.status === 'approved') ? 'approved' : jobs.some(job => job.discrepancyStatus === 'rejected') ? 'rejected' : 'pending';
             return <div className="ledger-card" style={{border:'1px solid #eee',marginBottom:16}} key={day}>
               <p className="eyebrow">{new Date(`${day}T12:00:00`).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})}</p>
               <h3>Cash dispatch summary</h3>
               <p className="muted">Is date par agent ko assign ki gayi tamam machines ka combined total.</p>
+              {(returnsByDay[day] || []).length > 0 && <div style={{marginTop:12,padding:'10px 12px',background:'#f7faf8',borderRadius:8}}><b>Agent returned bills:</b> {returnsByDay[day].reduce((sum, item) => sum + Number(item.amount || 0), 0).toLocaleString()} <span style={{fontSize:12,color:'#667085'}}>({returnsByDay[day].map(item => item.status || 'pending').join(', ')})</span></div>}
               <div className="ledger-stats" style={{margin:'18px 0 0'}}>
-                <div className="lstat amber"><small>EXPECTED CASH</small><strong>{money(expected)}</strong><span>{bills20(expected)} bills ($20)</span></div>
-                <div className="lstat blue"><small>ACTUAL LOADED CASH</small><strong>{money(loaded)}</strong><span>{bills20(loaded)} bills ($20)</span></div>
-                <div className={'lstat '+(difference ? 'red' : 'green')}><small>TOTAL DIFFERENCE</small><strong>{money(difference)}</strong><span>{bills20(difference)} bills shortfall</span></div>
+                <div className="lstat amber"><small>EXPECTED BILLS</small><strong>{expected.toLocaleString()}</strong><span>Daily route total</span></div>
+                <div className="lstat blue"><small>ACTUAL LOADED BILLS</small><strong>{loaded.toLocaleString()}</strong><span>Daily route total</span></div>
+                <div className="lstat teal"><small>RETURNED BILLS</small><strong>{returned.toLocaleString()}</strong><span>Approved returns</span></div>
+                <div className={'lstat '+(difference ? 'red' : 'green')}><small>TOTAL DIFFERENCE</small><strong>{difference.toLocaleString()}</strong><span>Expected - Loaded - Returned</span></div>
               </div>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginTop:22,paddingTop:18,borderTop:'1px solid #eee'}}>
                 <div><b>Status:</b> <span className={'badge badge-'+status}>{status === 'pending' ? 'Pending approval' : status}</span></div>
@@ -393,12 +407,13 @@ export default function CashLedger(){
             {auditData.returns.length===0 ? <p className="muted">No returns in this period.</p> :
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Date</th><th>Amount</th><th>Note</th><th>Received By</th></tr></thead>
+                <thead><tr><th>Date</th><th>Returned bills</th><th>Note</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>{auditData.returns.map(r=><tr key={r._id}>
                   <td style={{whiteSpace:'nowrap'}}>{fmt(r.date)}</td>
-                  <td><b style={{color:'#267249'}}>{money(r.amount)}</b></td>
+                  <td><b style={{color:'#267249'}}>{Number(r.amount || 0).toLocaleString()} bills</b></td>
                   <td style={{fontSize:12,color:'#555'}}>{r.note||'—'}</td>
-                  <td style={{fontSize:12}}>{r.recordedBy?.name}</td>
+                  <td><span className={'badge badge-'+(r.status || 'pending')}>{r.status || 'pending'}</span></td>
+                  <td style={{whiteSpace:'nowrap'}}>{(!r.status || r.status === 'pending') && <><button onClick={()=>reviewReturn(r._id,'approved')} style={{border:0,borderRadius:6,padding:'5px 8px',background:'#dff4e7',color:'#17643a',fontWeight:700,cursor:'pointer'}}>Approve</button> <button onClick={()=>reviewReturn(r._id,'rejected')} style={{border:0,borderRadius:6,padding:'5px 8px',background:'#fde8e7',color:'#b42318',fontWeight:700,cursor:'pointer'}}>Reject</button></>}</td>
                 </tr>)}</tbody>
               </table>
             </div>}
