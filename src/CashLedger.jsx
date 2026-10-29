@@ -37,7 +37,8 @@ export default function CashLedger(){
   const[auditAgentId, setAuditAgentId] = useState('');
   const[auditData, setAuditData] = useState(null);
   const[auditLoading, setAuditLoading] = useState(false);
-  const[auditStatus, setAuditStatus] = useState('all');
+  // Show only cash discrepancies by default; admins can switch to all statuses.
+  const[auditStatus, setAuditStatus] = useState('discrepancy');
   const[auditPage, setAuditPage] = useState(1);
   const auditPageSize = 15;
 
@@ -333,7 +334,7 @@ export default function CashLedger(){
             {filteredAuditJobs.length===0 ? <p className="muted">No matching dispatch records.</p> :
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Date</th><th>Terminal</th><th>Job status</th><th>To be load</th><th>Cash loaded</th><th>Short by</th><th>Resolution</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Date</th><th>Terminal</th><th>Job status</th><th>Expected cash</th><th>Actual cash loaded</th><th>Difference / short</th><th>Resolution</th><th>Actions</th></tr></thead>
                 <tbody>{visibleAuditJobs.map(j=>{
                   const loaded=actualLoaded(j); const difference=Math.max(0,Number(j.cashToLoad||0)-loaded);
                   return <tr key={j._id}>
