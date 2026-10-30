@@ -127,6 +127,14 @@ export default function CashLedger(){
       setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(j=>j._id===job._id ? {...j, discrepancyStatus:value} : j)} : prev);
     } catch (e) { alert(e.message); }
   };
+  const updateJobReturned = async (job, value) => {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 0) return;
+    try {
+      await req(`/route-sheet/${job._id}`, { method:'PATCH', body:JSON.stringify({ routeReturnedBills: amount }) });
+      setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(j=>j._id===job._id ? {...j, routeReturnedBills: amount} : j)} : prev);
+    } catch (e) { alert(e.message); }
+  };
   const filteredAuditJobs = (auditData?.jobs || []).filter(j => auditStatus==='all' || (auditStatus==='discrepancy' ? (Number(j.cashToLoad||0)-actualLoaded(j)>0) : j.status===auditStatus));
   const auditPageCount = Math.max(1, Math.ceil(filteredAuditJobs.length / auditPageSize));
   const visibleAuditJobs = filteredAuditJobs.slice((auditPage - 1) * auditPageSize, auditPage * auditPageSize);
@@ -148,8 +156,11 @@ export default function CashLedger(){
     (groups[key] ||= []).push(job);
     return groups;
   }, {})).sort(([a], [b]) => dateSort === 'asc' ? a.localeCompare(b) : b.localeCompare(a));
+  const jobDays = dailyAuditGroups.map(([day]) => day).sort();
   const returnsByDay = (auditData?.returns || []).reduce((groups, item) => {
-    const key = dateKey(item);
+    const submittedDay = dateKey(item);
+    const priorDays = jobDays.filter(day => day <= submittedDay);
+    const key = priorDays.length ? priorDays[priorDays.length - 1] : submittedDay;
     (groups[key] ||= []).push(item);
     return groups;
   }, {});
@@ -157,13 +168,13 @@ export default function CashLedger(){
     ? 'approved' : auditJobs.some(job => job.discrepancyStatus === 'rejected') ? 'rejected' : 'pending';
   const setAggregateStatus = async (status, targetJobs = auditJobs) => {
     if (!targetJobs.length) return;
-    const label = status === 'complete' ? 'approve' : 'reject';
+    const label = status === 'complete' ? 'close' : status === 'open' ? 'open' : 'reject';
     if (!confirm(`Are you sure you want to ${label} this agent's complete dispatch summary?`)) return;
     try {
       await Promise.all(targetJobs.map(job => req(`/route-sheet/${job._id}`, {
         method:'PATCH', body:JSON.stringify({ discrepancyStatus: status })
       })));
-      setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(job => ({...job, discrepancyStatus:status, status:status === 'complete' ? 'approved' : 'issue_reported'}))} : prev);
+      setAuditData(prev => prev ? {...prev, jobs: prev.jobs.map(job => ({...job, discrepancyStatus:status, status:status === 'complete' ? 'approved' : status === 'open' ? 'assigned' : 'issue_reported'}))} : prev);
     } catch (e) { alert(e.message); }
   };
   const reviewReturn = async (id, status) => {
@@ -377,14 +388,13 @@ export default function CashLedger(){
           {dailyAuditGroups.length === 0 ? <div className="ledger-card"><p className="muted">No dispatch records in this date range.</p></div> : dailyAuditGroups.map(([day, jobs]) => {
             const expected = jobs.reduce((sum, job) => sum + Number(job.cashToLoad || 0) / 20, 0);
             const loaded = jobs.reduce((sum, job) => sum + actualLoaded(job), 0);
-            const returned = (returnsByDay[day] || []).filter(item => item.status === 'approved').reduce((sum, item) => sum + Number(item.amount || 0), 0);
+            const returned = (returnsByDay[day] || []).filter(item => item.status !== 'rejected').reduce((sum, item) => sum + Number(item.amount || 0), 0) + jobs.reduce((sum, job) => sum + Number(job.routeReturnedBills || 0), 0);
             const difference = Math.max(0, expected - loaded - returned);
-            const status = jobs.every(job => job.discrepancyStatus === 'complete' || job.status === 'approved') ? 'approved' : jobs.some(job => job.discrepancyStatus === 'rejected') ? 'rejected' : 'pending';
+            const status = difference === 0 ? 'approved' : jobs.some(job => job.discrepancyStatus === 'rejected') ? 'rejected' : 'pending';
             return <div className="ledger-card" style={{border:'1px solid #eee',marginBottom:16}} key={day}>
               <p className="eyebrow">{new Date(`${day}T12:00:00`).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})}</p>
               <h3>Cash dispatch summary</h3>
               <p className="muted">Is date par agent ko assign ki gayi tamam machines ka combined total.</p>
-              {(returnsByDay[day] || []).length > 0 && <div style={{marginTop:12,padding:'10px 12px',background:'#f7faf8',borderRadius:8}}><b>Agent returned bills:</b> {returnsByDay[day].reduce((sum, item) => sum + Number(item.amount || 0), 0).toLocaleString()} <span style={{fontSize:12,color:'#667085'}}>({returnsByDay[day].map(item => item.status || 'pending').join(', ')})</span></div>}
               <div className="ledger-stats" style={{margin:'18px 0 0'}}>
                 <div className="lstat amber"><small>EXPECTED BILLS</small><strong>{expected.toLocaleString()}</strong><span>Daily route total</span></div>
                 <div className="lstat blue"><small>ACTUAL LOADED BILLS</small><strong>{loaded.toLocaleString()}</strong><span>Daily route total</span></div>
@@ -393,31 +403,11 @@ export default function CashLedger(){
               </div>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginTop:22,paddingTop:18,borderTop:'1px solid #eee'}}>
                 <div><b>Status:</b> <span className={'badge badge-'+status}>{status === 'pending' ? 'Pending approval' : status}</span></div>
-                <div style={{display:'flex',gap:10}}>
-                  <button onClick={()=>setAggregateStatus('complete', jobs)} disabled={status==='approved'} style={{border:0,borderRadius:7,padding:'9px 16px',background:'#dff4e7',color:'#17643a',cursor:'pointer',fontWeight:700}}>Approve summary</button>
-                  <button onClick={()=>setAggregateStatus('rejected', jobs)} disabled={status==='rejected'} style={{border:0,borderRadius:7,padding:'9px 16px',background:'#fde8e7',color:'#b42318',cursor:'pointer',fontWeight:700}}>Reject summary</button>
-                </div>
+                <select value={status === 'approved' ? 'closed' : 'open'} onChange={e=>setAggregateStatus(e.target.value === 'closed' ? 'complete' : 'open')} style={{padding:'9px 14px',borderRadius:7,border:'1px solid #cbd5e1',fontWeight:700,cursor:'pointer'}}><option value="open">Open</option><option value="closed">Closed</option></select>
               </div>
             </div>;
           })}
 
-          <div className="ledger-card" style={{border:'1px solid #eee'}}>
-            <p className="eyebrow">CASH RETURNS RECORD</p>
-            <h3>Submitted money</h3>
-            {auditData.returns.length===0 ? <p className="muted">No returns in this period.</p> :
-            <div className="table-wrap">
-              <table>
-                <thead><tr><th>Date</th><th>Returned bills</th><th>Note</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody>{auditData.returns.map(r=><tr key={r._id}>
-                  <td style={{whiteSpace:'nowrap'}}>{fmt(r.date)}</td>
-                  <td><b style={{color:'#267249'}}>{Number(r.amount || 0).toLocaleString()} bills</b></td>
-                  <td style={{fontSize:12,color:'#555'}}>{r.note||'—'}</td>
-                  <td><span className={'badge badge-'+(r.status || 'pending')}>{r.status || 'pending'}</span></td>
-                  <td style={{whiteSpace:'nowrap'}}>{(!r.status || r.status === 'pending') && <><button onClick={()=>reviewReturn(r._id,'approved')} style={{border:0,borderRadius:6,padding:'5px 8px',background:'#dff4e7',color:'#17643a',fontWeight:700,cursor:'pointer'}}>Approve</button> <button onClick={()=>reviewReturn(r._id,'rejected')} style={{border:0,borderRadius:6,padding:'5px 8px',background:'#fde8e7',color:'#b42318',fontWeight:700,cursor:'pointer'}}>Reject</button></>}</td>
-                </tr>)}</tbody>
-              </table>
-            </div>}
-          </div>
         </div>
       </>}
     </div>}

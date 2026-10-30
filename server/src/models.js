@@ -55,7 +55,7 @@ const agentJobSchema = new mongoose.Schema({
   dueAt: { type: Date, required: true, index: true }, status: { type: String, enum: ['assigned', 'accepted', 'travelling', 'cash_loaded', 'issue_reported', 'approved', 'cancelled'], default: 'assigned', index: true },
   discrepancyStatus: { type: String, enum: ['open', 'complete', 'rejected'], default: 'open', index: true },
   events: [jobEventSchema], approvedAt: Date, approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  routeExistingCash: Number, routeCashLoaded: Number, routeLoadTime: String,
+  routeExistingCash: Number, routeCashLoaded: Number, routeReturnedBills: { type: Number, default: 0 }, routeLoadTime: String,
   routeBillsRemaining: Number, routeCashToLoad: Number, routeNote: String
 }, { timestamps: true });
 
@@ -65,9 +65,6 @@ const cashWithdrawalSchema = new mongoose.Schema({
   note: { type: String, maxlength: 500 },
   withdrawnBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   date: { type: Date, default: Date.now, index: true },
-  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
-  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  reviewedAt: Date,
 }, { timestamps: true });
 
 // Cash returned by agent after job(s) — unspent cash credited back
@@ -79,6 +76,9 @@ const cashReturnSchema = new mongoose.Schema({
   note: { type: String, maxlength: 500 },
   recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   date: { type: Date, default: Date.now, index: true },
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
+  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reviewedAt: Date,
 }, { timestamps: true });
 
 // Cash discrepancy — detected on import by comparing expected vs actual ATM balance
