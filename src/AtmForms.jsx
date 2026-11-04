@@ -166,7 +166,7 @@ export default function AtmForms() {
       case 'installation': return <AtmInstallationForm {...props} />;
       case 'agreement': return <AtmAgreementForm {...props} />;
       case 'removal': return <AtmRemovalForm {...props} />;
-      case 'setup': return <AssignTerminal initialData={viewingForm} readOnly={!!viewingForm} onDone={handleModalSuccess} />;
+      case 'setup': return <AssignTerminal swap initialData={viewingForm} readOnly={!!viewingForm} onDone={handleModalSuccess} />;
       case 'reprogram': return (
         <div style={{ padding: '40px 20px', textAlign: 'center' }}>
           <h2>⚙️ ATM Reprogram Form</h2>

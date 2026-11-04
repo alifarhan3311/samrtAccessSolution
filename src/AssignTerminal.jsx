@@ -1,7 +1,7 @@
 import React,{useEffect,useState}from'react';
 const req=async(p,o={})=>{const r=await fetch('/api'+p, { credentials: 'include',...o,headers:{'Content-Type':'application/json',...o.headers}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d};
 
-export default function AssignTerminal({ initialTerminalId, initialData, readOnly, onDone }){
+export default function AssignTerminal({ initialTerminalId, initialData, readOnly, onDone, swap = false }){
   const[id,setId]=useState(initialTerminalId||'');
   const[terminal,setTerminal]=useState();
   const[msg,setMsg]=useState('');
@@ -54,7 +54,7 @@ export default function AssignTerminal({ initialTerminalId, initialData, readOnl
   async function save(e){
     e.preventDefault();
     try{
-      await req('/terminals/'+terminal.terminalId+'/assign',{
+      await req('/terminals/'+terminal.terminalId+(swap?'/swap':'/assign'),{
         method:'POST',
         body:JSON.stringify({...f,wishAmount:+f.wishAmount,paymentAmount:+f.paymentAmount})
       });

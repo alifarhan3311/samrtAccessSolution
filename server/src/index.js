@@ -193,12 +193,15 @@ app.patch('/api/terminals/:id', auth, permit('admin', 'manager', 'terminals'), a
   } catch (e) { next(e) }
 });
 app.patch('/api/terminals/:id/status', auth, permit('admin', 'manager', 'terminals'), async (req, res, next) => { try { if (req.user.role === 'agent' && !req.user.canChangeTerminalStatus) return res.status(403).json({ message: 'You do not have permission to modify terminal status' }); const { status } = z.object({ status: z.enum(['Active', 'Inactive', 'Spare', 'Pending', 'Never Communicated']) }).parse(req.body); const t = await Terminal.findOneAndUpdate({ terminalId: req.params.id.toUpperCase() }, { $set: { 'official.status': status, 'official.raw.Status': status } }, { new: true }); if (!t) return res.status(404).json({ message: 'Terminal not found' }); await audit(req, 'TERMINAL_STATUS_CHANGED', 'Terminal', t.id, { terminalId: t.terminalId, status }); res.json(t); } catch (e) { next(e) } });
-app.post('/api/terminals/:id/assign', auth, permit('admin', 'manager', 'assign'), async (req, res, next) => {
+const saveTerminalAssignment = (allowDispatch) => async (req, res, next) => {
   try {
     const b = z.object({ businessName: z.string().min(2).max(150), address: z.string().min(3).max(250), city: z.string().min(2).max(100), locationArea: z.string().max(100).optional(), wishAmount: z.number().nonnegative(), paymentAmount: z.number().nonnegative().optional(), note: z.string().max(1000).optional(), agentId: z.string().optional(), cashToLoad: z.number().nonnegative().optional(), dueAt: z.string().optional() }).parse(req.body);
     const t = await Terminal.findOne({ terminalId: req.params.id.toUpperCase() });
     if (!t) return res.status(404).json({ message: 'Terminal not found' });
     let agent;
+    if (!allowDispatch && (b.agentId !== undefined || b.cashToLoad !== undefined || b.dueAt !== undefined)) {
+      return res.status(400).json({ message: 'ATM Swap cannot dispatch a cash-loading job' });
+    }
     if (b.agentId) {
       if (t.official?.status === 'Inactive') return res.status(400).json({ message: `Cannot assign agent: Terminal ${t.terminalId} is currently Inactive. Please activate the terminal first.` });
       agent = await User.findOne({ _id: b.agentId, role: 'agent', active: true });
@@ -240,7 +243,9 @@ app.post('/api/terminals/:id/assign', auth, permit('admin', 'manager', 'assign')
     await audit(req, 'TERMINAL_ASSIGNED', 'Terminal', t.id, { terminalId: t.terminalId, to: b.businessName, agent: agent?.email, cashToLoad: b.cashToLoad, wishAmount: b.wishAmount, jobId: job?.id });
     res.json({ terminal: t, job });
   } catch (e) { next(e) }
-});
+};
+app.post('/api/terminals/:id/assign', auth, permit('admin', 'manager', 'assign'), saveTerminalAssignment(true));
+app.post('/api/terminals/:id/swap', auth, permit('admin', 'atm'), saveTerminalAssignment(false));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: (req, file, cb) => cb(null, /\.(xlsx|xls)$/i.test(file.originalname)) });
 const proofUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 4 }, fileFilter: (req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype)) });
 app.post('/api/imports', auth, permit('admin', 'import'), upload.single('file'), async (req, res, next) => { try { if (!req.file) return res.status(400).json({ message: 'Excel file required' }); const result = await importWorkbook(req.file.buffer, req.file.originalname, req.user._id, req.app.locals.io); await audit(req, 'OFFICIAL_IMPORT', 'ImportRun', result.runId, { ...result, fileName: req.file.originalname }); res.status(201).json(result); } catch (e) { next(e) } });
