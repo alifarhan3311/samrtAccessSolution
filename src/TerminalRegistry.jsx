@@ -19,6 +19,8 @@ async function req(path, options = {}) {
 
 import { getTorontoDateString } from './timezone';
 const show = v => (v === 0 ? 0 : v || '—');
+const terminalAddress = t => t.current?.address?.trim() || t.official?.address || '';
+const terminalCity = t => t.current?.city?.trim() || t.official?.city || '';
 const fmt  = v => v ? getTorontoDateString(v) : '—';
 const terminalStatus = t => {
   const status = String(t?.official?.status || '').trim().toLowerCase();
@@ -103,7 +105,7 @@ export default function TerminalRegistry() {
 
     for (const t of data.items) {
       if (t.official?.locationArea) aSet.add(t.official.locationArea);
-      const city = t.official?.city;
+      const city = terminalCity(t);
       if (city) cSet.add(city);
 
       const st = terminalStatus(t).toLowerCase();
@@ -137,12 +139,12 @@ export default function TerminalRegistry() {
         return false;
       }
       // City filter
-      const city = t.official?.city || '';
+      const city = terminalCity(t);
       if (cityFilter !== 'all' && city !== cityFilter) {
         return false;
       }
       // Address filter
-      const addr = (t.official?.address || '').trim().toLowerCase();
+      const addr = (terminalAddress(t)).trim().toLowerCase();
       const isEmptyAddr = !addr || addr === '-' || addr === 'n/a' || addr === 'none' || addr === 'nil';
       if (addressFilter === 'empty' && !isEmptyAddr) return false;
       if (addressFilter === 'has_address' && isEmptyAddr) return false;
@@ -152,7 +154,7 @@ export default function TerminalRegistry() {
         const tid = (t.terminalId || '').toLowerCase();
         const temp = (t.official?.tempName || '').toLowerCase();
         const name = (t.official?.name || '').toLowerCase();
-        const addr = (t.official?.address || '').toLowerCase();
+        const addr = (terminalAddress(t)).toLowerCase();
         const cty  = (city || '').toLowerCase();
         const area = (t.official?.locationArea || '').toLowerCase();
         const ag   = (t.official?.agent || '').toLowerCase();
@@ -185,11 +187,11 @@ export default function TerminalRegistry() {
           valA = a.official?.name || '';
           valB = b.official?.name || ''; break;
         case 'address':
-          valA = a.official?.address || '';
-          valB = b.official?.address || ''; break;
+          valA = terminalAddress(a);
+          valB = terminalAddress(b); break;
         case 'city':
-          valA = a.official?.city || '';
-          valB = b.official?.city || ''; break;
+          valA = terminalCity(a);
+          valB = terminalCity(b); break;
         case 'locationArea':
           valA = a.official?.locationArea || ''; valB = b.official?.locationArea || ''; break;
         case 'wishAmount':
@@ -264,8 +266,8 @@ export default function TerminalRegistry() {
         "Terminal ID": t.terminalId,
         "Temp Name": t.official?.tempName || '',
         "Name": t.official?.name || '',
-        "Address": t.official?.address || '',
-        "City": t.official?.city || '',
+        "Address": terminalAddress(t),
+        "City": terminalCity(t),
         "Location Area": t.official?.locationArea || '',
         "Wish Amount": Number(t.official?.wishAmount) || 0,
         "Cash Balance": Number(t.official?.cashBalance) || 0,
@@ -455,8 +457,8 @@ export default function TerminalRegistry() {
                   </tr>
                 ) : (
                   paginatedItems.map(t => {
-                    const currentAddress = t.official?.address;
-                    const currentCity    = t.official?.city;
+                    const currentAddress = terminalAddress(t);
+                    const currentCity    = terminalCity(t);
                     return (
                       <tr key={t.terminalId}>
                         <td>
@@ -504,7 +506,7 @@ export default function TerminalRegistry() {
               <div className="tr-card-grid">
                 {paginatedItems.map(t => {
                   const currentBiz  = t.official?.tempName || t.official?.name;
-                  const currentCity = t.official?.city;
+                  const currentCity = terminalCity(t);
                   return (
                     <div
                       key={t.terminalId}
@@ -684,8 +686,8 @@ function TerminalModal({ t, onClose, onStatusChange, isAgent, canChangeStatus, o
   };
 
   const currentBiz     = t.official?.tempName || t.official?.name;
-  const currentAddress = t.official?.address;
-  const currentCity    = t.official?.city;
+  const currentAddress = terminalAddress(t);
+  const currentCity    = terminalCity(t);
 
   const editableFields = [
     { key: 'locationArea', label: 'Location Area' },
