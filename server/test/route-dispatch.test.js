@@ -52,3 +52,8 @@ test('print pages hold 15 machines without dropping, repeating, or adding an emp
     assert.ok(pages.every(page => page.length > 0 && page.length <= 15));
   }
 });
+
+test('time picker accepts 24-hour times and older compact typed times', async () => {
+  const { routeTimeValue } = await import('../../src/route-dispatch-values.mjs');
+  for (const [input, output] of [['14:40','14:40'],['9:05','09:05'],['1430','14:30'],['915','09:15'],['00:00','00:00'],['23:59','23:59'],['14:40:00','14:40'],['25:00',''],['12:90',''],[null,'']]) assert.equal(routeTimeValue(input), output);
+});

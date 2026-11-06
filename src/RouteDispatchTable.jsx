@@ -1,5 +1,5 @@
 import React from 'react';
-import { routeDispatchValues, routeNote, routePrintPages } from './route-dispatch-values.mjs';
+import { routeDispatchValues, routeNote, routePrintPages, routeTimeValue } from './route-dispatch-values.mjs';
 import './route-dispatch-table.css';
 
 const money = value => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(value);
@@ -15,16 +15,16 @@ export default function RouteDispatchTable({ groups, date, agentName, canEdit, o
   const returned = returns.filter(item => item.status !== 'rejected').reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const sheetDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T12:00:00`).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'2-digit'}).replaceAll(' ', '-') : date;
   const renderTable = (pageRows, showTotals = true, printing = false) => {
-  const field = (row, key, label, value, type = 'number') => printing ? <span>{value ?? ''}</span> : <>
+  const field = (row, key, label, value, type = 'number') => printing ? <span>{type === 'time' ? routeTimeValue(value) || value || '' : value ?? ''}</span> : <>
     <input aria-label={`${row.job.terminalId || 'Spare cash'} ${label}`} className="rs-input no-print" type={type}
-      min={type === 'number' ? 0 : undefined} step={type === 'number' ? 'any' : undefined}
-      value={value ?? ''} disabled={!canEdit(key)} placeholder={type === 'number' ? '0' : ''}
+      min={type === 'number' ? 0 : undefined} step={type === 'number' ? 'any' : type === 'time' ? 60 : undefined}
+      value={type === 'time' ? routeTimeValue(value) : value ?? ''} disabled={!canEdit(key)} placeholder={type === 'number' ? '0' : ''}
       onChange={e => onChange(row.groupIndex, row.jobIndex, key, e.target.value)}
-      onBlur={e => onSave(row.job._id, key, e.target.value)} />
+      onBlur={e => { if (!(type === 'time' && !e.target.value && value && !routeTimeValue(value))) onSave(row.job._id, key, e.target.value); }} />
     <span className="print-only">{value ?? ''}</span>
   </>;
   return <table className="route-dispatch-table">
-    <colgroup>{[8,14,19,7,8,5,5,8,5,6,5,10].map((width, index) => <col key={index} style={{width:`${width}%`}} />)}</colgroup>
+    <colgroup>{[8,13,17,7,8,5,5,8,5,6,8,10].map((width, index) => <col key={index} style={{width:`${width}%`}} />)}</colgroup>
     <thead>
       <tr>{['Terminal ID','Name','Address / Locations','City','Processing Data','Day Total','Current Bills','Add Bills Amount','Add Bills','Total Bills Added','Time','Notes'].map(label => <th key={label}>{label}</th>)}</tr>
       <tr className="dispatch-date-row"><th>{sheetDate}</th><th>{agentName}</th><th colSpan="10" /></tr>
@@ -45,7 +45,7 @@ export default function RouteDispatchTable({ groups, date, agentName, canEdit, o
           <td className="dispatch-numeric">{money(values.expectedAmount)}<small className="no-print">Planned bills</small>{field(row, 'routeCashToLoad', 'Planned bills', values.expectedBills)}</td>
           <td>{field(row, 'routeCashLoaded', 'Add Bills', job.routeCashLoaded)}</td>
           <td className="dispatch-numeric">{count(values.totalBillsAdded)}</td>
-          <td>{field(row, 'routeLoadTime', 'Time', job.routeLoadTime, 'text')}</td>
+          <td>{field(row, 'routeLoadTime', 'Time', job.routeLoadTime, 'time')}</td>
           <td>{field(row, 'routeNote', 'Notes', routeNote(job), 'text')}</td>
         </tr>;
       })}

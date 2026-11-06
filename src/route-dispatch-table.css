@@ -9,6 +9,8 @@
 .route-dispatch-table .rs-input { width:100%; min-width:0; box-sizing:border-box; min-height:30px; padding:3px 2px; font:13px/1.4 Arial,sans-serif; text-align:center; color:#111; border-radius:0; background:transparent; }
 .route-dispatch-table .rs-input:disabled { color:#111; opacity:1; }
 .route-dispatch-table .rs-input:focus { outline:2px solid #316952; outline-offset:-2px; }
+.route-dispatch-table .rs-input[type="time"] { font-size:12px; color-scheme:light; }
+.route-dispatch-table .rs-input[type="time"]::-webkit-calendar-picker-indicator { cursor:pointer; margin:0; padding:2px; }
 .route-dispatch-table .dispatch-balance { background:#eee; font-weight:bold; }
 .route-dispatch-print-pages { display:none; }
 @media print {

@@ -1,4 +1,12 @@
 export const BILL_VALUE = 20;
+// Accept previously typed HHMM / H:MM values without changing stored records on read.
+export function routeTimeValue(value) {
+  const text = String(value ?? '').trim();
+  const match = text.match(/^(\d{1,2}):([0-5]\d)(?::[0-5]\d)?$/)
+    || text.match(/^(\d{1,2})([0-5]\d)$/);
+  if (!match || Number(match[1]) > 23) return '';
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
 export const MACHINES_PER_PRINT_PAGE = 15;
 export function routePrintPages(rows) {
   return Array.from({ length: Math.ceil(rows.length / MACHINES_PER_PRINT_PAGE) }, (_, index) =>
