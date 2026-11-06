@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './route-sheet.css';
+import RouteDispatchTable from './RouteDispatchTable.jsx';
 
 const auth = () => ({  });
 
@@ -62,6 +63,7 @@ export default function RouteSheet() {
     if (!targetAgent) {
       setGroups([]);
       setTickets([]);
+      setReturns([]);
       return;
     }
 
@@ -84,10 +86,14 @@ export default function RouteSheet() {
       .finally(() => setTicketsLoading(false));
 
     // Load cash returns for this agent on this date
-    if (!isAgent) {
+    {
       setReturnsLoading(true);
       json(`/cash/returns?agentId=${targetAgent}&from=${date}&to=${date}`)
-        .then(res => setReturns(res.items || []))
+        .then(async res => {
+          const extraPages = await Promise.all(Array.from({ length: Math.max(0, (res.pages || 1) - 1) }, (_, index) =>
+            json(`/cash/returns?agentId=${targetAgent}&from=${date}&to=${date}&page=${index + 2}`)));
+          setReturns([...(res.items || []), ...extraPages.flatMap(page => page.items || [])]);
+        })
         .catch(() => setReturns([]))
         .finally(() => setReturnsLoading(false));
     }
@@ -104,7 +110,7 @@ export default function RouteSheet() {
         body: JSON.stringify({ [field]: value === '' ? null : value })
       });
     } catch (err) {
-      console.error('Failed to save', err);
+      setError(`Failed to save: ${err.message}`);
     }
   };
 
@@ -138,7 +144,7 @@ export default function RouteSheet() {
         method: 'POST',
         body: JSON.stringify({ agentId: targetAgent, amount, note: rForm.note || undefined, terminalId: rForm.terminalId || undefined, date })
       });
-      setRMsg({ text: `Recorded: $${amount} cash return saved.`, ok: true });
+      setRMsg({ text: `Recorded: ${amount} returned bills saved.`, ok: true });
       setRForm({ amount: '', note: '', terminalId: '' });
       loadData();
     } catch (err) {
@@ -190,19 +196,6 @@ export default function RouteSheet() {
       loadData();
     } catch (e) { alert(e.message); }
   };
-
-  let totalRemaining = 0;
-  let totalToLoad = 0;
-  let totalExistingCash = 0;
-  let totalCashLoaded = 0;
-  groups.forEach(g => {
-    g.jobs.forEach(j => {
-      totalRemaining += Math.floor((j.terminal?.official?.cashBalance || 0) / 20);
-      totalToLoad += Math.floor((j.cashToLoad || 0) / 20);
-      totalExistingCash += Number(j.routeExistingCash) || 0;
-      totalCashLoaded += Number(j.routeCashLoaded) || 0;
-    });
-  });
 
   const displayedTickets = ticketFilter === 'pending'
     ? tickets.filter(t => ['Open', 'In Progress'].includes(t.status))
@@ -258,7 +251,7 @@ export default function RouteSheet() {
       ) : (
         <div className="rs-paper">
           {/* Printable Header */}
-          <div className="rs-print-header" style={{ marginBottom: '14px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>
+          <div className="rs-print-header no-print" style={{ marginBottom: '14px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>SMART ACCESS &middot; DAILY AGENT ROUTE SHEET</h2>
@@ -273,199 +266,17 @@ export default function RouteSheet() {
           {/* 1. Daily Cash Loading Table */}
           {hasRouteJobs ? (
             <div className="rs-section" style={{ marginBottom: '24px' }}>
-              <div className="rs-section-title" style={{ fontWeight: 800, fontSize: '14px', marginBottom: '8px', color: '#111827', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div className="rs-section-title no-print" style={{ fontWeight: 800, fontSize: '14px', marginBottom: '8px', color: '#111827', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span>💰 ATM Cash Replenishment Route</span>
               </div>
-              <table className="rs-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '30%' }}>DBA Name and Address</th>
-                    <th style={{ width: '8%' }}>Terminal<br />Status</th>
-                    <th style={{ width: '9%' }}>Bills<br />Remainin</th>
-                    <th style={{ width: '10%' }}>Existing<br />Cash</th>
-                    <th style={{ width: '9%' }}>To Be<br />Load</th>
-                    <th style={{ width: '12%' }}>Cash<br />Loaded</th>
-                    <th style={{ width: '11%' }}>Load<br />Time</th>
-                    <th className="no-print" style={{ width: '11%' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groups.map((group, gIdx) => (
-                    <React.Fragment key={group.area}>
-                      <tr className="rs-area-row">
-                        <td colSpan="8" style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '15px', background: '#f4f4f4' }}>
-                          {group.area.toUpperCase()}
-                        </td>
-                      </tr>
-                      {group.jobs.map((job, jIdx) => {
-                        const term = job.terminal || {};
-                        const bizName = term.official?.tempName || term.current?.businessName || term.official?.name || job.businessName || job.terminalId;
-                        const address = term.current?.address || job.address || term.official?.address;
-                        const city = term.current?.city || term.official?.city || job.city;
-                        const status = term.official?.status === 'Inactive' ? 'Down' : 'Up';
-                        const remain = Math.floor((term.official?.cashBalance || 0) / 20);
-                        const load = Math.floor((job.cashToLoad || 0) / 20);
-
-                        return (
-                          <tr key={job._id}>
-                            <td className="rs-dba-cell">
-                              {job.isSpareCash ? (
-                                <>
-                                  <strong style={{ color: '#0369a1', fontSize: '14px' }}>💰 {job.businessName}</strong>
-                                  <br />
-                                  <span style={{ fontSize: '11px', color: '#444' }}>{job.address}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <strong>{job.terminalId} : {bizName}</strong>
-                                  <br />
-                                  <span style={{ fontSize: '11px', color: '#444' }}>{address} {city ? `· ${city}` : ''}</span>
-                                </>
-                              )}
-                              {(() => {
-                                let commentText = '';
-                                const noteRaw = (job.events && job.events[0]?.note) || '';
-                                if (noteRaw.includes(' — ')) {
-                                  commentText = noteRaw.split(' — ').slice(1).join(' — ').trim();
-                                } else if (!noteRaw.startsWith('Area route:') && !noteRaw.startsWith('Reassigned') && noteRaw.trim()) {
-                                  commentText = noteRaw.trim();
-                                }
-                                const displayNote = job.routeNote !== undefined ? (job.routeNote || '') : commentText;
-
-                                return (
-                                  <>
-                                    <div style={{ marginTop: '6px' }} className="no-print">
-                                      <input 
-                                        type="text"
-                                        placeholder="➕ Add comment..."
-                                        value={displayNote}
-                                        disabled={!canEditRouteField('routeNote')}
-                                        onChange={e => handleInputChange(gIdx, jIdx, 'routeNote', e.target.value)}
-                                        onBlur={e => handleUpdateJob(job._id, 'routeNote', e.target.value)}
-                                        style={{
-                                          width: '100%',
-                                          background: displayNote ? '#fef3c7' : '#f8fafc',
-                                          border: displayNote ? '1.5px solid #f59e0b' : '1px dashed #cbd5e1',
-                                          color: displayNote ? '#92400e' : '#64748b',
-                                          padding: '4px 8px',
-                                          borderRadius: '6px',
-                                          fontSize: '11.5px',
-                                          fontWeight: displayNote ? 800 : 500,
-                                          outline: 'none',
-                                          transition: 'all 0.2s'
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="print-only">
-                                      {displayNote ? <div style={{ marginTop: '4px', fontSize: '11px', fontWeight: 800 }}>📝 {displayNote}</div> : null}
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                            </td>
-                            <td style={{ textAlign: 'center' }}>{job.isSpareCash ? '—' : status}</td>
-                            <td className="rs-blank-cell p-0">
-                              {job.isSpareCash ? (
-                                <div style={{ textAlign: 'center', color: '#aaa', paddingTop: '12px' }}>—</div>
-                              ) : (
-                                <input
-                                  className="rs-input"
-                                  type="number"
-                                  value={job.routeBillsRemaining ?? remain ?? ''}
-                                  disabled={!canEditRouteField('routeBillsRemaining')}
-                                  onChange={e => handleInputChange(gIdx, jIdx, 'routeBillsRemaining', e.target.value)}
-                                  onBlur={e => handleUpdateJob(job._id, 'routeBillsRemaining', e.target.value)}
-                                />
-                              )}
-                            </td>
-                            <td className="rs-blank-cell p-0">
-                              {job.isSpareCash ? (
-                                <div style={{ textAlign: 'center', color: '#aaa', paddingTop: '12px' }}>—</div>
-                              ) : (
-                                <input
-                                  className="rs-input"
-                                  type="number"
-                                  value={job.routeExistingCash ?? ''}
-                                  disabled={!canEditRouteField('routeExistingCash')}
-                                  onChange={e => handleInputChange(gIdx, jIdx, 'routeExistingCash', e.target.value)}
-                                  onBlur={e => handleUpdateJob(job._id, 'routeExistingCash', e.target.value)}
-                                />
-                              )}
-                            </td>
-                            <td className="rs-blank-cell p-0">
-                              <input
-                                className="rs-input"
-                                type="number"
-                                value={job.routeCashToLoad ?? load ?? ''}
-                                disabled={!canEditRouteField('routeCashToLoad')}
-                                onChange={e => handleInputChange(gIdx, jIdx, 'routeCashToLoad', e.target.value)}
-                                onBlur={e => handleUpdateJob(job._id, 'routeCashToLoad', e.target.value)}
-                              />
-                            </td>
-                            <td className="rs-blank-cell p-0">
-                              <input
-                                className="rs-input"
-                                type="number"
-                                value={job.routeCashLoaded ?? ''}
-                                disabled={!canEditRouteField('routeCashLoaded')}
-                                onChange={e => handleInputChange(gIdx, jIdx, 'routeCashLoaded', e.target.value)}
-                                onBlur={e => handleUpdateJob(job._id, 'routeCashLoaded', e.target.value)}
-                              />
-                            </td>
-                            <td className="rs-blank-cell p-0">
-                              <input
-                                className="rs-input"
-                                type="text"
-                                placeholder="HH:MM"
-                                value={job.routeLoadTime ?? ''}
-                                disabled={!canEditRouteField('routeLoadTime')}
-                                onChange={e => handleInputChange(gIdx, jIdx, 'routeLoadTime', e.target.value)}
-                                onBlur={e => handleUpdateJob(job._id, 'routeLoadTime', e.target.value)}
-                              />
-                            </td>
-                            <td className="no-print" style={{ textAlign: 'center' }}>
-                              {!isAgent && (
-                              reassigningId === job._id ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                  <select
-                                    value={newAgentId}
-                                    onChange={e => setNewAgentId(e.target.value)}
-                                    style={{ padding: '2px 4px', fontSize: '11px', width: '100%' }}
-                                  >
-                                    <option value="">Select Agent...</option>
-                                    {agents.map(a => <option key={a._id} value={a._id}>{a.name}</option>)}
-                                  </select>
-                                  <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                                    <button onClick={() => saveReassign(job._id)} style={{ fontSize: '11px', padding: '2px 4px', background: '#183d36', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}>Save</button>
-                                    <button onClick={() => { setReassigningId(null); setNewAgentId(''); }} style={{ fontSize: '11px', padding: '2px 4px', background: '#eee', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer' }}>Cancel</button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                                  <button onClick={() => setReassigningId(job._id)} title="Reassign Agent" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}>🔄</button>
-                                  <button onClick={() => cancelJob(job._id)} title="Cancel Job" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#dc2626' }}>❌</button>
-                                </div>
-                              ))}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
-                  <tr style={{ background: '#f9fafb' }}>
-                    <td colSpan="2" style={{ textAlign: 'right', fontWeight: 800, paddingRight: '12px' }}>TOTAL:</td>
-                    <td className="rs-blank-cell p-0" style={{ textAlign: 'center', fontWeight: 800, padding: '8px' }}>
-                      {groups.reduce((sum, g) => sum + g.jobs.reduce((s, job) => s + Number(job.routeBillsRemaining ?? Math.floor((job.terminal?.official?.cashBalance || 0) / 20) ?? 0), 0), 0)}
-                    </td>
-                    <td className="rs-blank-cell p-0" style={{ textAlign: 'center', fontWeight: 800, padding: '8px' }}>{totalExistingCash}</td>
-                    <td className="rs-blank-cell p-0" style={{ textAlign: 'center', fontWeight: 800, padding: '8px' }}>
-                      {groups.reduce((sum, g) => sum + g.jobs.reduce((s, job) => s + Number(job.routeCashToLoad ?? Math.floor((job.cashToLoad || 0) / 20) ?? 0), 0), 0)}
-                    </td>
-                    <td className="rs-blank-cell p-0" style={{ textAlign: 'center', fontWeight: 800, padding: '8px' }}>{totalCashLoaded}</td>
-                    <td className="rs-blank-cell" colSpan="2"></td>
-                  </tr>
-                </tbody>
-              </table>
+              <RouteDispatchTable groups={groups} date={date} agentName={agentDisplayName}
+                canEdit={canEditRouteField} onChange={handleInputChange} onSave={handleUpdateJob} returns={returns} />
+              {!isAgent && <div className="no-print" style={{marginTop:12}}><details><summary>Manage assignments (reassign / remove)</summary>
+                {groups.flatMap(group => group.jobs).map(job => <div key={job._id} style={{display:'flex',gap:10,alignItems:'center',padding:8}}>
+                  <strong>{job.terminalId || job.businessName}</strong>
+                  {reassigningId === job._id ? <><select aria-label={`Reassign ${job.terminalId}`} value={newAgentId} onChange={e => setNewAgentId(e.target.value)}><option value="">Select Agent...</option>{agents.map(agent => <option key={agent._id} value={agent._id}>{agent.name}</option>)}</select><button onClick={() => saveReassign(job._id)}>Save</button><button onClick={() => {setReassigningId(null);setNewAgentId('');}}>Cancel</button></> : <><button onClick={() => setReassigningId(job._id)}>Reassign</button><button onClick={() => cancelJob(job._id)}>Remove from route</button></>}
+                </div>)}
+              </details></div>}
             </div>
           ) : (
             <div className="rs-no-routes-banner no-print" style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', color: '#64748b', fontSize: '13px' }}>
@@ -474,7 +285,7 @@ export default function RouteSheet() {
           )}
 
           {/* 2. Assigned Maintenance & Problem Tickets Section */}
-          <div className="rs-tickets-section" style={{ marginTop: hasRouteJobs ? '28px' : '0' }}>
+          <div className={`rs-tickets-section${hasRouteJobs ? ' no-print' : ''}`} style={{ marginTop: hasRouteJobs ? '28px' : '0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '15px', fontWeight: 800, color: '#111827' }}>
@@ -660,7 +471,7 @@ export default function RouteSheet() {
                           <tr key={r._id}>
                             <td style={{ whiteSpace: 'nowrap' }}>{new Date(r.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
                             <td><b>{r.terminalId || '—'}</b></td>
-                            <td><b style={{ color: '#267249' }}>${(r.amount || 0).toLocaleString()}</b></td>
+                            <td><b style={{ color: '#267249' }}>{(r.amount || 0).toLocaleString()} bills</b></td>
                             <td style={{ fontSize: '12px', color: '#555' }}>{r.note || '—'}</td>
                             <td style={{ fontSize: '12px' }}>{r.recordedBy?.name}</td>
                             <td style={{ textAlign: 'right' }}>

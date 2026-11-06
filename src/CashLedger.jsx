@@ -390,20 +390,20 @@ export default function CashLedger(){
             const loaded = jobs.reduce((sum, job) => sum + actualLoaded(job), 0);
             const returned = (returnsByDay[day] || []).filter(item => item.status !== 'rejected').reduce((sum, item) => sum + Number(item.amount || 0), 0) + jobs.reduce((sum, job) => sum + Number(job.routeReturnedBills || 0), 0);
             const difference = Math.max(0, expected - loaded - returned);
-            const status = difference === 0 ? 'approved' : jobs.some(job => job.discrepancyStatus === 'rejected') ? 'rejected' : 'pending';
+            // Status is controlled only by the administrator; the difference never changes it automatically.
+            const status = jobs.length > 0 && jobs.every(job => ['complete','approved'].includes(job.discrepancyStatus)) ? 'closed' : 'open';
             return <div className="ledger-card" style={{border:'1px solid #eee',marginBottom:16}} key={day}>
               <p className="eyebrow">{new Date(`${day}T12:00:00`).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})}</p>
               <h3>Cash dispatch summary</h3>
               <p className="muted">Is date par agent ko assign ki gayi tamam machines ka combined total.</p>
-              <div className="ledger-stats" style={{margin:'18px 0 0'}}>
-                <div className="lstat amber"><small>EXPECTED BILLS</small><strong>{expected.toLocaleString()}</strong><span>Daily route total</span></div>
-                <div className="lstat blue"><small>ACTUAL LOADED BILLS</small><strong>{loaded.toLocaleString()}</strong><span>Daily route total</span></div>
-                <div className="lstat teal"><small>RETURNED BILLS</small><strong>{returned.toLocaleString()}</strong><span>Approved returns</span></div>
-                <div className={'lstat '+(difference ? 'red' : 'green')}><small>TOTAL DIFFERENCE</small><strong>{difference.toLocaleString()}</strong><span>Expected - Loaded - Returned</span></div>
+              <div className="table-wrap" style={{marginTop:18}}>
+                <table><thead><tr><th>Expected bills</th><th>Actual loaded</th><th>Returned bills</th><th>Total difference</th></tr></thead>
+                  <tbody><tr><td>{expected.toLocaleString()}</td><td>{loaded.toLocaleString()}</td><td>{returned.toLocaleString()}</td><td style={{fontWeight:800,color:difference ? '#b42318' : '#17643a'}}>{difference.toLocaleString()}</td></tr></tbody>
+                </table>
               </div>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginTop:22,paddingTop:18,borderTop:'1px solid #eee'}}>
-                <div><b>Status:</b> <span className={'badge badge-'+status}>{status === 'pending' ? 'Pending approval' : status}</span></div>
-                <select value={status === 'approved' ? 'closed' : 'open'} onChange={e=>setAggregateStatus(e.target.value === 'closed' ? 'complete' : 'open')} style={{padding:'9px 14px',borderRadius:7,border:'1px solid #cbd5e1',fontWeight:700,cursor:'pointer'}}><option value="open">Open</option><option value="closed">Closed</option></select>
+                <div><b>Status:</b> <span className={'badge badge-'+status}>{status}</span></div>
+                <select value={status} onChange={e=>setAggregateStatus(e.target.value === 'closed' ? 'complete' : 'open', jobs)} style={{padding:'9px 14px',borderRadius:7,border:'1px solid #cbd5e1',fontWeight:700,cursor:'pointer'}}><option value="open">Open</option><option value="closed">Closed</option></select>
               </div>
             </div>;
           })}

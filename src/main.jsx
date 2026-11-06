@@ -33,6 +33,7 @@ import './ledger.css';
 import './system-logs.css';
 import './loader.css';
 import LoadingSpinner from './LoadingSpinner.jsx';
+import { GroupedNavigation, PageNavigation } from './NavigationChrome.jsx';
 
 window.addEventListener('unhandledrejection', (event) => {
   if (event.reason && event.reason.stack && (event.reason.stack.includes('200.js') || event.reason.message.includes('M_ID'))) {
@@ -360,7 +361,7 @@ function Shell() {
     <Toaster position="top-right" />
     <aside className={mobileMenuOpen ? 'open' : ''}>
       <div className="logo"><div className="mark">S</div><div><b>Smart Access</b><small>COMMAND CENTER</small></div></div>
-      <nav>{links.map(x => <button key={x[0]} className={location.pathname === x[3] || (x[0] === 'dashboard' && location.pathname === '/') ? 'active' : ''} onClick={() => { navigate(x[3]); setMobileMenuOpen(false); }}><i>{x[2]}</i>{x[1]}</button>)}</nav>
+      <GroupedNavigation links={links} currentPath={currentPath} onNavigate={path => { navigate(path); setMobileMenuOpen(false); }} />
       <div className="user"><span>{user.name?.[0]}</span><div><b>{user.name}</b><small>{user.role}</small></div><button onClick={logout}>&#8617;</button></div>
       {mobileMenuOpen && <button className="mobile-close" onClick={() => setMobileMenuOpen(false)}>×</button>}
     </aside>
@@ -373,6 +374,7 @@ function Shell() {
         </div>
         <div className="live"><span></span> Systems operational</div>
       </header>
+      <PageNavigation links={links} currentPath={currentPath} title={titles[currentPath] || currentPath} navigate={navigate} />
       <Routes>
         <Route path="/" element={<Navigate to={agent ? '/jobs' : '/dashboard'} replace />} />
         <Route path="/dashboard" element={<Dashboard go={go} />} />

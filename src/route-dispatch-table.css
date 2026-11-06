@@ -1,0 +1,31 @@
+.route-dispatch-scroll { overflow-x: auto; margin-bottom: 18px; }
+.route-dispatch-table { width:100%; min-width:1200px; border-collapse:collapse; table-layout:fixed; color:#111; font:13px/1.4 Arial,sans-serif; }
+.route-dispatch-table th, .route-dispatch-table td { border:1px solid #333; padding:8px 6px; vertical-align:middle; text-align:center; overflow-wrap:anywhere; text-transform:none; letter-spacing:normal; font-size:inherit; color:inherit; background:transparent; }
+.route-dispatch-table thead th { background:#d1d1d1; text-align:center; font-size:12px; font-weight:700; height:44px; line-height:1.35; }
+.route-dispatch-table .dispatch-date-row th { height:30px; }
+.route-dispatch-table tbody tr:nth-child(even) { background:#dedede; }
+.route-dispatch-table small { display:block; font-size:11px; color:#444; line-height:1.4; }
+.route-dispatch-table .dispatch-numeric { text-align:center; font-variant-numeric:tabular-nums; }
+.route-dispatch-table .rs-input { width:100%; min-width:0; box-sizing:border-box; min-height:30px; padding:3px 2px; font:13px/1.4 Arial,sans-serif; text-align:center; color:#111; border-radius:0; background:transparent; }
+.route-dispatch-table .rs-input:disabled { color:#111; opacity:1; }
+.route-dispatch-table .rs-input:focus { outline:2px solid #316952; outline-offset:-2px; }
+.route-dispatch-table .dispatch-balance { background:#eee; font-weight:bold; }
+.route-dispatch-print-pages { display:none; }
+@media print {
+  .route-dispatch-print-pages { display:block; }
+  .route-dispatch-print-page { break-after:page; page-break-after:always; }
+  .route-dispatch-print-page:last-child { break-after:auto; page-break-after:auto; }
+  .route-dispatch-print-page thead { display:table-header-group; }
+  .route-dispatch-print-page .route-dispatch-table thead th { height:8mm; }
+  .route-dispatch-print-page .route-dispatch-table .dispatch-date-row th { height:6mm; }
+  .route-dispatch-print-page .route-dispatch-table tbody td { height:7mm; }
+  .route-dispatch-print-page .route-dispatch-table th, .route-dispatch-print-page .route-dispatch-table td { padding:1mm; line-height:1.2; }
+  .route-dispatch-page-number { padding-top:2mm; text-align:right; font:8px Arial,sans-serif; color:#333; }
+  .route-dispatch-scroll { overflow:visible !important; }
+  .route-dispatch-table { min-width:0; width:100%; font-size:10px; }
+  .route-dispatch-table thead th { font-size:9px; }
+  .route-dispatch-table th, .route-dispatch-table td { padding:4px 3px; }
+  .route-dispatch-table small { font-size:8px; }
+  .route-dispatch-table tr { break-inside:avoid; }
+  .route-dispatch-table th, .route-dispatch-table tr { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+}

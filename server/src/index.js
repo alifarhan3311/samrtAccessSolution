@@ -266,7 +266,34 @@ app.get('/api/jobs/active-terminal/:terminalId', auth, async (req, res, next) =>
     res.json({ busy: Boolean(job), job });
   } catch (e) { next(e) }
 });
-app.get('/api/route-sheet', auth, permit('admin', 'manager', 'agent'), async (req, res, next) => { try { const q = { status: { $nin: ['cancelled'] } }; if (req.user.role === 'agent') q.agent = req.user._id; else if (req.query.agentId) q.agent = req.query.agentId; if (req.query.date) { const today = new Date(req.query.date + 'T00:00:00.000Z'); const tomorrow = new Date(today); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); q.dueAt = { $gte: today, $lt: tomorrow }; } const jobs = await AgentJob.find(q).populate('terminal', 'terminalId official.status official.tempName official.name official.locationArea official.cashBalance official.city official.address current.businessName current.address current.city').lean(); const validJobs = jobs.filter(j => j.terminal || j.isSpareCash); const grouped = {}; for (const job of validJobs) { const area = job.isSpareCash ? 'SPARE CASH' : (job.terminal?.official?.locationArea || 'Unassigned Area'); if (!grouped[area]) grouped[area] = []; grouped[area].push(job); } const sortedGroups = Object.keys(grouped).sort().map(key => ({ area: key, jobs: grouped[key].sort((a, b) => (a.terminalId || '').localeCompare(b.terminalId || '')) })); res.json(sortedGroups); } catch (e) { next(e) } });
+app.get('/api/route-sheet', auth, permit('admin', 'manager', 'agent'), async (req, res, next) => {
+  try {
+    const q = { status: { $nin: ['cancelled'] } };
+    if (req.user.role === 'agent') q.agent = req.user._id;
+    else if (req.query.agentId) q.agent = req.query.agentId;
+    if (req.query.date) {
+      const today = new Date(req.query.date + 'T00:00:00.000Z');
+      const tomorrow = new Date(today); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      q.dueAt = { $gte: today, $lt: tomorrow };
+    }
+    const jobs = await AgentJob.find(q).populate('terminal', 'terminalId official.status official.tempName official.name official.locationArea official.cashBalance official.city official.address current.businessName current.address current.city').lean();
+    const validJobs = jobs.filter(job => job.terminal || job.isSpareCash);
+    const terminalIds = validJobs.filter(job => job.terminal).map(job => job.terminal._id);
+    const latestDate = validJobs.length ? new Date(Math.max(...validJobs.map(job => new Date(job.dueAt).getTime()))) : null;
+    // Only loading counts are read from history; another agent's personal data is never returned.
+    const history = terminalIds.length ? await AgentJob.find({ terminal: { $in: terminalIds }, dueAt: { $lte: latestDate }, status: { $ne: 'cancelled' }, routeCashLoaded: { $ne: null, $exists: true } })
+      .select('terminal dueAt status routeExistingCash routeCashLoaded createdAt updatedAt').lean() : [];
+    const { previousTotalBillsAdded } = require('./route-history');
+    const grouped = {};
+    for (const job of validJobs) {
+      job.previousTotalBillsAdded = job.isSpareCash ? 0 : previousTotalBillsAdded(job, history);
+      const area = job.isSpareCash ? 'SPARE CASH' : (job.terminal?.official?.locationArea || 'Unassigned Area');
+      if (!grouped[area]) grouped[area] = [];
+      grouped[area].push(job);
+    }
+    res.json(Object.keys(grouped).sort().map(area => ({ area, jobs: grouped[area].sort((a,b) => (a.terminalId || '').localeCompare(b.terminalId || '')) })));
+  } catch (error) { next(error); }
+});
 app.patch('/api/route-sheet/:jobId', auth, permit('admin', 'manager', 'agent'), async (req, res, next) => {
   try {
     const job = await AgentJob.findById(req.params.jobId);

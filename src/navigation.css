@@ -1,0 +1,27 @@
+/* Scoped shell/navigation polish: no operational form or print layout changes. */
+.shell .grouped-navigation { gap: 6px; padding-top: 4px; }
+.shell nav .navigation-group-toggle { width: 100%; justify-content: space-between; color: #b7cbc4; padding: 12px; font-size: 13px; }
+.shell nav .navigation-group-toggle.current-group { background: #ffffff0b; color: #e8f4f0; }
+.navigation-group-links { padding: 5px 0 5px 9px; }
+.navigation-group-links[hidden] { display: none; }
+.shell .navigation-group-links button { width: 100%; margin-bottom: 3px; font-size: 12.5px; }
+.shell .navigation-group-toggle:focus-visible, .shell .navigation-group-links button:focus-visible { outline: 2px solid #d5ff55; outline-offset: -2px; }
+.page-navigation { padding: 16px 0 20px; }
+.page-navigation-trail { display: flex; align-items: center; gap: 16px; }
+.navigation-back { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 8px 13px; background: #fff; color: #173d35; border: 1px solid #dce3df; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.navigation-back:hover { background: #eaf0eb; }
+.shell .navigation-breadcrumb { display: flex; flex-direction: row; flex: initial; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0; color: #737f79; font-size: 12px; overflow: visible; }
+.navigation-breadcrumb strong { color: #24453c; font-weight: 600; }
+.shell .related-navigation { display: flex; flex-direction: row; flex: initial; flex-wrap: wrap; gap: 6px; margin-top: 16px; padding: 5px; border: 1px solid #dde5df; border-radius: 11px; background: #eaf0eb; width: fit-content; max-width: 100%; overflow: visible; }
+.shell .related-navigation button { padding: 9px 15px; border-radius: 7px; border: 0; background: transparent; color: #5e6e66; font-weight: 600; font-size: 12px; cursor: pointer; }
+.related-navigation button.selected { background: #fff; color: #173d35; box-shadow: 0 1px 4px #143b2310; }
+.related-navigation button:hover { color: #173d35; background: #ffffff90; }
+.navigation-back:focus-visible, .related-navigation button:focus-visible { outline: 2px solid #266e58; outline-offset: 2px; }
+@media (max-width: 600px) {
+  .page-navigation-trail { align-items: flex-start; gap: 10px; }
+  .shell .navigation-breadcrumb { font-size: 11px; gap: 6px; padding-top: 6px; }
+  .navigation-breadcrumb > span:first-child, .navigation-breadcrumb > span:nth-child(2) { display: none; }
+  .shell .related-navigation { width: 100%; }
+  .shell .related-navigation button { flex: 1; padding: 9px 10px; }
+}
+@media print { .page-navigation { display: none !important; } }

@@ -122,7 +122,7 @@
 @media print {
   @page {
     margin: 10mm;
-    size: landscape;
+    size: A4 landscape;
   }
 
   /* ── Body & background ── */
