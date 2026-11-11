@@ -214,7 +214,9 @@ function Shell() {
             email: profile.email || current.email,
             role: profile.role || current.role,
             allowedTabs: Array.isArray(profile.allowedTabs) ? profile.allowedTabs : current.allowedTabs,
-            canChangeTerminalStatus: Boolean(profile.canChangeTerminalStatus)
+            canChangeTerminalStatus: Boolean(profile.canChangeTerminalStatus),
+            canViewAllDailyRoutes: Boolean(profile.canViewAllDailyRoutes),
+            canEditAllDailyRoutes: Boolean(profile.canEditAllDailyRoutes)
           };
           localStorage.setItem('user', JSON.stringify(refreshed));
           return refreshed;

@@ -40,6 +40,8 @@ const userSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true }, role: { type: String, enum: ['admin', 'user', 'agent'], default: 'user' },
   allowedTabs: { type: [String], default: ['terminals', 'tickets', 'jobs', 'routesheet'] },
   canChangeTerminalStatus: { type: Boolean, default: false },
+  canViewAllDailyRoutes: { type: Boolean, default: false },
+  canEditAllDailyRoutes: { type: Boolean, default: false },
   active: { type: Boolean, default: true }, lastLoginAt: Date
 }, { timestamps: true });
 

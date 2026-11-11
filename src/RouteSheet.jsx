@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './route-sheet.css';
 import RouteDispatchTable from './RouteDispatchTable.jsx';
 
@@ -26,12 +26,31 @@ export default function RouteSheet() {
 
   // Use the current profile saved at login. The JWT payload is intentionally
   // minimal and does not always contain the same fields as the profile.
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user') || 'null'));
   const isAgent = user?.role === 'agent';
-  const canEditRouteField = field => !isAgent || ['routeExistingCash', 'routeCashLoaded'].includes(field);
+  const ownId = String(user?.id || user?._id || '');
+  const canSelectAgent = !isAgent || user?.canViewAllDailyRoutes === true || user?.canEditAllDailyRoutes === true;
 
   const [agentId, setAgentId] = useState(isAgent ? (user?.id || user?._id) : '');
   const [date, setDate] = useState(() => getTorontoDateString());
+  const viewingOtherAgent = isAgent && canSelectAgent && agentId && String(agentId) !== ownId;
+  const canEditRouteField = field => !isAgent || user?.canEditAllDailyRoutes === true
+    || (!viewingOtherAgent && ['routeExistingCash', 'routeCashLoaded'].includes(field));
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => json('/me').then(profile => {
+      if (cancelled) return;
+      const fresh = {...profile,id:profile._id || profile.id};
+      localStorage.setItem('user',JSON.stringify(fresh));
+      setUser(fresh);
+      if (fresh.role === 'agent' && !fresh.canViewAllDailyRoutes && !fresh.canEditAllDailyRoutes) {
+        setAgentId(fresh.id);
+      }
+    }).catch(() => {});
+    refresh(); window.addEventListener('focus', refresh);
+    return () => { cancelled = true; window.removeEventListener('focus', refresh); };
+  }, []);
 
   const [groups, setGroups] = useState([]);
   const [tickets, setTickets] = useState([]);
@@ -51,15 +70,17 @@ export default function RouteSheet() {
   const [reassigningId, setReassigningId] = useState(null);
   const [newAgentId, setNewAgentId] = useState('');
   const [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', onConfirm: null });
+  const loadSequence = useRef(0);
 
   useEffect(() => {
-    if (!isAgent) {
-      json('/users/agents').then(setAgents).catch(() => { });
+    if (canSelectAgent) {
+      json('/route-sheet/agents').then(setAgents).catch(() => setAgents([]));
     }
-  }, [isAgent]);
+  }, [canSelectAgent]);
 
   const loadData = () => {
-    const targetAgent = isAgent ? (user?.id || user?._id) : agentId;
+    const sequence = ++loadSequence.current;
+    const targetAgent = canSelectAgent ? agentId : ownId;
     if (!targetAgent) {
       setGroups([]);
       setTickets([]);
@@ -68,22 +89,24 @@ export default function RouteSheet() {
     }
 
     setLoading(true);
+    setGroups([]); setTickets([]); setReturns([]);
     setError('');
     const qs = new URLSearchParams();
-    if (!isAgent) qs.set('agentId', targetAgent);
+    qs.set('agentId', targetAgent);
     if (date) qs.set('date', date);
 
     json(`/route-sheet?${qs.toString()}`)
-      .then(data => setGroups(data))
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+      .then(data => { if(sequence === loadSequence.current) setGroups(data); })
+      .catch(err => { if(sequence === loadSequence.current) setError(err.message); })
+      .finally(() => { if(sequence === loadSequence.current) setLoading(false); });
 
     // Load assigned tickets for this agent
     setTicketsLoading(true);
-    json(`/tickets?assignedTo=${targetAgent}&limit=100`)
-      .then(res => setTickets(res.items || []))
-      .catch(() => setTickets([]))
-      .finally(() => setTicketsLoading(false));
+    if (!viewingOtherAgent) json(`/tickets?assignedTo=${targetAgent}&limit=100`)
+      .then(res => { if(sequence === loadSequence.current) setTickets(res.items || []); })
+      .catch(() => { if(sequence === loadSequence.current) setTickets([]); })
+      .finally(() => { if(sequence === loadSequence.current) setTicketsLoading(false); });
+    else {setTickets([]);setTicketsLoading(false);}
 
     // Load cash returns for this agent on this date
     {
@@ -92,18 +115,20 @@ export default function RouteSheet() {
         .then(async res => {
           const extraPages = await Promise.all(Array.from({ length: Math.max(0, (res.pages || 1) - 1) }, (_, index) =>
             json(`/cash/returns?agentId=${targetAgent}&from=${date}&to=${date}&page=${index + 2}`)));
-          setReturns([...(res.items || []), ...extraPages.flatMap(page => page.items || [])]);
+          if(sequence === loadSequence.current) setReturns([...(res.items || []), ...extraPages.flatMap(page => page.items || [])]);
         })
-        .catch(() => setReturns([]))
-        .finally(() => setReturnsLoading(false));
+        .catch(() => { if(sequence === loadSequence.current) setReturns([]); })
+        .finally(() => { if(sequence === loadSequence.current) setReturnsLoading(false); });
     }
   };
 
   useEffect(() => {
     loadData();
-  }, [agentId, date]);
+    return () => { loadSequence.current++; };
+  }, [agentId, date, canSelectAgent]);
 
   const handleUpdateJob = async (jobId, field, value) => {
+    if (!canEditRouteField(field)) return;
     try {
       await json(`/route-sheet/${jobId}`, {
         method: 'PATCH',
@@ -217,11 +242,11 @@ export default function RouteSheet() {
         </div>
 
         <div className="rs-filters">
-          {!isAgent && (
+          {canSelectAgent && (
             <label>Agent
               <select value={agentId} onChange={e => setAgentId(e.target.value)}>
                 <option value="">Select Agent...</option>
-                {agents.map(a => <option key={a._id} value={a._id}>{a.name}</option>)}
+                {agents.map(a => <option key={a._id} value={a._id}>{a.name}{a.active === false ? ' (inactive)' : ''}</option>)}
               </select>
             </label>
           )}
@@ -240,7 +265,7 @@ export default function RouteSheet() {
 
       {error && <p className="error no-print">{error}</p>}
 
-      {!agentId && !isAgent ? (
+      {!agentId && canSelectAgent ? (
         <p className="aj-empty no-print">Please select an agent to view their route sheet and assigned maintenance tickets.</p>
       ) : loading && ticketsLoading ? (
         <p className="no-print" style={{ padding: '40px', textAlign: 'center' }}>Loading route sheet & tickets...</p>
@@ -285,7 +310,7 @@ export default function RouteSheet() {
           )}
 
           {/* 2. Assigned Maintenance & Problem Tickets Section */}
-          <div className={`rs-tickets-section${hasRouteJobs ? ' no-print' : ''}`} style={{ marginTop: hasRouteJobs ? '28px' : '0' }}>
+          {!viewingOtherAgent && <div className={`rs-tickets-section${hasRouteJobs ? ' no-print' : ''}`} style={{ marginTop: hasRouteJobs ? '28px' : '0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '15px', fontWeight: 800, color: '#111827' }}>
@@ -418,10 +443,10 @@ export default function RouteSheet() {
                 </tbody>
               </table>
             )}
-          </div>
+          </div>}
 
           {/* 3. Cash Returns Section */}
-          {(
+          {!viewingOtherAgent && (
             <div className="ledger-split no-print" style={{ marginTop: '40px', gap: '20px' }}>
               <div className="ledger-card">
                 <p className="eyebrow">RECORD CASH RETURN</p>

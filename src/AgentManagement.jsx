@@ -8,7 +8,7 @@ async function api(path,options={}){
   return d;
 }
 
-const EMPTY_FORM={name:'',email:'',phoneNumber:'',password:'',allowedTabs:['terminals','tickets','jobs','routesheet'],canChangeTerminalStatus:false};
+const EMPTY_FORM={name:'',email:'',phoneNumber:'',password:'',allowedTabs:['terminals','tickets','jobs','routesheet'],canChangeTerminalStatus:false,canViewAllDailyRoutes:false,canEditAllDailyRoutes:false};
 
 const ALL_TABS = [
   { id: 'dashboard', label: 'Command Center (Dashboard)' },
@@ -28,6 +28,7 @@ const ALL_TABS = [
 ];
 
 export default function AgentManagement(){
+  const isAdmin=JSON.parse(localStorage.getItem('user')||'null')?.role==='admin';
   const[agents,setAgents]=useState([]);
   const[showInactive,setShowInactive]=useState(false);
   const[form,setForm]=useState(EMPTY_FORM);
@@ -51,7 +52,7 @@ export default function AgentManagement(){
 
   function startEdit(agent){
     setEditing(agent);
-    setForm({name:agent.name,email:agent.email,phoneNumber:agent.phoneNumber||'',password:'',allowedTabs:agent.allowedTabs||['terminals','tickets','jobs','routesheet'],canChangeTerminalStatus:agent.canChangeTerminalStatus||false});
+    setForm({name:agent.name,email:agent.email,phoneNumber:agent.phoneNumber||'',password:'',allowedTabs:agent.allowedTabs||['terminals','tickets','jobs','routesheet'],canChangeTerminalStatus:agent.canChangeTerminalStatus||false,canViewAllDailyRoutes:!!agent.canViewAllDailyRoutes,canEditAllDailyRoutes:!!agent.canEditAllDailyRoutes});
     setPicture(null);setPreview(null);setMsg('');
   }
   function cancelEdit(){setEditing(null);setForm(EMPTY_FORM);setPicture(null);setPreview(null);setMsg('');}
@@ -65,6 +66,7 @@ export default function AgentManagement(){
     const body=new FormData();
     if(!editing){
       Object.entries(form).forEach(([k,v])=>{
+        if(['canViewAllDailyRoutes','canEditAllDailyRoutes'].includes(k)&&!isAdmin)return;
         if(k==='allowedTabs'){
           if(v.length===0) body.append('allowedTabs','');
           else v.forEach(t=>body.append('allowedTabs',t));
@@ -88,14 +90,17 @@ export default function AgentManagement(){
       if(form.canChangeTerminalStatus!==editing.canChangeTerminalStatus){
         body.append('canChangeTerminalStatus',form.canChangeTerminalStatus);
       }
+      if(isAdmin) for(const key of ['canViewAllDailyRoutes','canEditAllDailyRoutes']) {
+        if(form[key]!==Boolean(editing[key])) body.append(key,String(form[key]));
+      }
       if(picture)body.append('picture',picture);
     }
     try{
       if(!editing){
-        await fetch('/api/users/agents', { credentials: 'include',method:'POST',headers:authH(),body});
+        await api('/users/agents', {method:'POST',body});
         setMsg('Agent account created successfully.');
       }else{
-        await fetch(`/api/users/agents/${editing._id}`, { credentials: 'include',method:'PATCH',headers:authH(),body});
+        await api(`/users/agents/${editing._id}`, {method:'PATCH',body});
         setMsg('Agent updated successfully.');
       }
       setForm(EMPTY_FORM);setPicture(null);setPreview(null);setEditing(null);load();
@@ -149,6 +154,12 @@ export default function AgentManagement(){
         </div>
         <div className="tab-access-section" style={{marginTop:'1.5rem',paddingTop:'1.5rem',borderTop:'1px solid var(--border)'}}>
           <h4 style={{marginBottom:'0.2rem'}}>Tab Access Permissions</h4>
+          {isAdmin && <fieldset style={{padding:14,margin:'14px 0',border:'1px solid #dce1dc',borderRadius:8}}>
+            <legend>Daily Route Coordinator Permissions</legend>
+            <label style={{display:'flex',flexDirection:'row',gap:8,marginBottom:10}}><input type="checkbox" checked={form.canViewAllDailyRoutes} onChange={e=>setForm(f=>({...f,canViewAllDailyRoutes:e.target.checked,canEditAllDailyRoutes:e.target.checked?f.canEditAllDailyRoutes:false,allowedTabs:e.target.checked?[...new Set([...f.allowedTabs,'routesheet'])]:f.allowedTabs}))}/>View / Print All Agents’ Daily Routes</label>
+            <label style={{display:'flex',flexDirection:'row',gap:8}}><input type="checkbox" checked={form.canEditAllDailyRoutes} onChange={e=>setForm(f=>({...f,canEditAllDailyRoutes:e.target.checked,canViewAllDailyRoutes:e.target.checked?true:f.canViewAllDailyRoutes,allowedTabs:e.target.checked?[...new Set([...f.allowedTabs,'routesheet'])]:f.allowedTabs}))}/>Edit All Agents’ Daily Routes</label>
+            <small>Editing does not grant cash approval, agent management, reassignment or deletion rights.</small>
+          </fieldset>}
           <p className="muted" style={{marginBottom:'1rem',fontSize:'0.85rem'}}>Select which tabs this agent is allowed to view and interact with.</p>
           <div style={{marginBottom:'1.5rem'}}>
             <label style={{display:'inline-flex',flexDirection:'row',alignItems:'center',gap:'0.5rem',cursor:'pointer',fontSize:'0.9rem',background:'#e0f2fe',color:'#0369a1',padding:'0.6rem 1rem',borderRadius:'0.4rem',fontWeight:'600'}}>
