@@ -12,6 +12,13 @@
 .route-dispatch-table .rs-input[type="time"] { font-size:12px; color-scheme:light; }
 .route-dispatch-table .rs-input[type="time"]::-webkit-calendar-picker-indicator { cursor:pointer; margin:0; padding:2px; }
 .route-dispatch-table .dispatch-balance { background:#eee; font-weight:bold; }
+.route-dispatch-table.has-row-actions { min-width:1400px; }
+.dispatch-action-buttons { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
+.dispatch-action-buttons button, .dispatch-action-buttons select { box-sizing:border-box; max-width:100%; border:1px solid #b8c9c1; border-radius:5px; padding:5px 7px; font:600 11px Arial,sans-serif; background:#f1f7f3; color:#173e36; cursor:pointer; }
+.dispatch-action-buttons select { width:100%; }
+.dispatch-action-buttons button.dispatch-remove { background:#fff3f1; color:#a3342a; border-color:#e9c5c0; }
+.dispatch-action-buttons button:disabled { opacity:.5; cursor:not-allowed; }
+.dispatch-action-buttons button:focus-visible, .dispatch-action-buttons select:focus-visible { outline:2px solid #316952; outline-offset:2px; }
 .route-dispatch-print-pages { display:none; }
 @media print {
   .route-dispatch-print-pages { display:block; }

@@ -233,6 +233,18 @@ export default function RouteSheet() {
   const hasTickets = displayedTickets.length > 0;
   const hasAnyData = hasRouteJobs || hasTickets;
 
+  const renderRouteActions = job => reassigningId === job._id ? <div className="dispatch-action-buttons">
+    <select aria-label={`Reassign ${job.terminalId}`} value={newAgentId} onChange={e => setNewAgentId(e.target.value)}>
+      <option value="">Select Agent...</option>
+      {agents.map(agent => <option key={agent._id} value={agent._id}>{agent.name}</option>)}
+    </select>
+    <button type="button" disabled={!newAgentId} onClick={() => saveReassign(job._id)}>Save</button>
+    <button type="button" onClick={() => {setReassigningId(null);setNewAgentId('');}}>Cancel</button>
+  </div> : <div className="dispatch-action-buttons">
+    <button type="button" aria-label={`Reassign ${job.terminalId || job.businessName}`} onClick={() => setReassigningId(job._id)}>Reassign</button>
+    <button type="button" className="dispatch-remove" aria-label={`Remove ${job.terminalId || job.businessName} from route`} onClick={() => cancelJob(job._id)}>Remove from route</button>
+  </div>;
+
   return (
     <div className="route-sheet-page">
       <div className="rs-header no-print">
@@ -295,13 +307,8 @@ export default function RouteSheet() {
                 <span>💰 ATM Cash Replenishment Route</span>
               </div>
               <RouteDispatchTable groups={groups} date={date} agentName={agentDisplayName}
-                canEdit={canEditRouteField} onChange={handleInputChange} onSave={handleUpdateJob} returns={returns} />
-              {!isAgent && <div className="no-print" style={{marginTop:12}}><details><summary>Manage assignments (reassign / remove)</summary>
-                {groups.flatMap(group => group.jobs).map(job => <div key={job._id} style={{display:'flex',gap:10,alignItems:'center',padding:8}}>
-                  <strong>{job.terminalId || job.businessName}</strong>
-                  {reassigningId === job._id ? <><select aria-label={`Reassign ${job.terminalId}`} value={newAgentId} onChange={e => setNewAgentId(e.target.value)}><option value="">Select Agent...</option>{agents.map(agent => <option key={agent._id} value={agent._id}>{agent.name}</option>)}</select><button onClick={() => saveReassign(job._id)}>Save</button><button onClick={() => {setReassigningId(null);setNewAgentId('');}}>Cancel</button></> : <><button onClick={() => setReassigningId(job._id)}>Reassign</button><button onClick={() => cancelJob(job._id)}>Remove from route</button></>}
-                </div>)}
-              </details></div>}
+                canEdit={canEditRouteField} onChange={handleInputChange} onSave={handleUpdateJob} returns={returns}
+                renderActions={!isAgent ? renderRouteActions : undefined} />
             </div>
           ) : (
             <div className="rs-no-routes-banner no-print" style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', color: '#64748b', fontSize: '13px' }}>
